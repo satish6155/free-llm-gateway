@@ -14,6 +14,8 @@
     setupKeyForm();
     setupBenchmarkBtn();
     setupComboForm();
+    setupPlayground();
+    setupGatewayKeyForm();
     loadStatus();
     startAutoRefresh();
   });
@@ -52,6 +54,18 @@
     }
     if (tab === 'combos') {
       loadCombos();
+    }
+    if (tab === 'playground') {
+      loadPlaygroundModels();
+    }
+    if (tab === 'ratetracking') {
+      loadRateTracking();
+    }
+    if (tab === 'sessions') {
+      loadSessions();
+    }
+    if (tab === 'gatewaykeys') {
+      loadGatewayKeys();
     }
   }
 
@@ -371,7 +385,9 @@
     clearEl(grid);
     var known = ['openrouter','github','groq','cerebras','cloudflare',
       'huggingface','nvidia','siliconflow','cohere','google_gemini',
-      'mistral','kilo','llm7','ollama'];
+      'mistral','kilo','llm7','ollama','deepseek','together','fireworks',
+      'sambanova','chutes','anthropic','openai','perplexity','xai','novita',
+      'z_ai','modelscope'];
     var rl = data.rate_limits || {};
     var health = data.health || {};
     var provInfo = data.providers || {};
@@ -1925,4 +1941,370 @@
       }
     } catch(e) {}
   }
+  // ── Playground Tab ──────────────────────────────────────────────
+  var _pgModelsLoaded = false;
+
+  function setupPlayground() {
+    var sendBtn = document.getElementById('pg-send-btn');
+    var clearBtn = document.getElementById('pg-clear-btn');
+    var tempSlider = document.getElementById('pg-temp');
+
+    if (sendBtn) sendBtn.addEventListener('click', sendPlaygroundMessage);
+    if (clearBtn) clearBtn.addEventListener('click', function() {
+      var resp = document.getElementById('pg-response');
+      if (resp) resp.innerHTML = '<span style="color:var(--text-muted)">Response will appear here...</span>';
+      var meta = document.getElementById('pg-meta');
+      if (meta) meta.textContent = '';
+      var msgEl = document.getElementById('pg-message');
+      if (msgEl) msgEl.value = '';
+    });
+    if (tempSlider) tempSlider.addEventListener('input', function() {
+      var val = document.getElementById('pg-temp-val');
+      if (val) val.textContent = this.value;
+    });
+  }
+
+  function loadPlaygroundModels() {
+    if (_pgModelsLoaded) return;
+    var select = document.getElementById('pg-model');
+    if (!select) return;
+    clearEl(select);
+    var models = cachedStatus ? cachedStatus.models || [] : [];
+    if (!models.length) {
+      var opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = 'No models available';
+      select.appendChild(opt);
+      return;
+    }
+    models.forEach(function(m) {
+      var opt = document.createElement('option');
+      opt.value = m.name;
+      opt.textContent = m.name;
+      select.appendChild(opt);
+    });
+    _pgModelsLoaded = true;
+  }
+
+  async function sendPlaygroundMessage() {
+    var model = document.getElementById('pg-model');
+    var system = document.getElementById('pg-system');
+    var message = document.getElementById('pg-message');
+    var temp = document.getElementById('pg-temp');
+    var maxTokens = document.getElementById('pg-max-tokens');
+    var respEl = document.getElementById('pg-response');
+    var metaEl = document.getElementById('pg-meta');
+    var sendBtn = document.getElementById('pg-send-btn');
+    if (!model || !message || !respEl) return;
+
+    var modelVal = model.value;
+    var msgVal = message.value.trim();
+    if (!modelVal || !msgVal) { alert('Select a model and enter a message'); return; }
+
+    var messages = [];
+    var sysVal = system ? system.value.trim() : '';
+    if (sysVal) messages.push({ role: 'system', content: sysVal });
+    messages.push({ role: 'user', content: msgVal });
+
+    respEl.textContent = '';
+    if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = 'Sending...'; }
+    if (metaEl) metaEl.textContent = 'Sending request...';
+
+    var startTime = Date.now();
+    try {
+      var resp = await fetch('/api/playground', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: modelVal,
+          messages: messages,
+          temperature: parseFloat(temp ? temp.value : '0.7'),
+          max_tokens: parseInt(maxTokens ? maxTokens.value : '1024')
+        })
+      });
+      var data = await resp.json();
+      var elapsed = Date.now() - startTime;
+
+      if (data.error) {
+        respEl.textContent = 'Error: ' + data.error;
+        respEl.style.color = '#f85149';
+      } else {
+        var content_text = data.choices && data.choices[0] && data.choices[0].message
+          ? data.choices[0].message.content : JSON.stringify(data);
+        respEl.textContent = content_text;
+        respEl.style.color = '';
+        if (metaEl) {
+          var tokens = data.usage || {};
+          metaEl.textContent = 'Provider: ' + (data.provider || '-') +
+            ' | Latency: ' + elapsed + 'ms' +
+            ' | Tokens: ' + ((tokens.total_tokens || 0)) +
+            (data.routed_via ? ' | Routed: ' + data.routed_via : '');
+        }
+      }
+    } catch(e) {
+      respEl.textContent = 'Error: ' + e.message;
+      respEl.style.color = '#f85149';
+      if (metaEl) metaEl.textContent = '';
+    }
+    if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = 'Send'; }
+  }
+
+  // ── Rate Tracking Tab ────────────────────────────────────────────
+  async function loadRateTracking() {
+    var tbody = document.getElementById('rt-tbody');
+    var summary = document.getElementById('rt-summary');
+    if (!tbody) return;
+    try {
+      var resp = await fetch('/api/rate-tracking');
+      if (!resp.ok) return;
+      var data = await resp.json();
+      renderRateTracking(data, tbody, summary);
+    } catch(e) { console.error('loadRateTracking error:', e); }
+  }
+
+  function renderRateTracking(data, tbody, summaryEl) {
+    clearEl(tbody);
+    var providers = data.providers || {};
+    var keys = Object.keys(providers);
+
+    // Summary
+    if (summaryEl) {
+      clearEl(summaryEl);
+      var totalRpm = 0, totalRpd = 0;
+      keys.forEach(function(k) {
+        var entries = providers[k] || [];
+        entries.forEach(function(e) {
+          totalRpm += (e.rpm || 0);
+          totalRpd += (e.rpd || 0);
+        });
+      });
+      [
+        { label: 'Providers Tracked', value: keys.length },
+        { label: 'Total RPM', value: totalRpm },
+        { label: 'Total RPD', value: totalRpd },
+      ].forEach(function(item) {
+        var card = document.createElement('div');
+        card.className = 'stat-card';
+        var lbl = document.createElement('div');
+        lbl.className = 'label';
+        lbl.textContent = item.label;
+        card.appendChild(lbl);
+        var val = document.createElement('div');
+        val.className = 'value';
+        val.style.fontSize = '20px';
+        val.textContent = item.value;
+        card.appendChild(val);
+        summaryEl.appendChild(card);
+      });
+    }
+
+    if (!keys.length) {
+      addEmptyRow(tbody, 7, 'No rate tracking data yet. Data appears after making requests.');
+      return;
+    }
+
+    keys.forEach(function(provider) {
+      var entries = providers[provider] || [];
+      entries.forEach(function(entry) {
+        var tr = document.createElement('tr');
+        appendCell(tr, provider);
+        appendCodeCell(tr, entry.model || '*');
+        appendCell(tr, (entry.rpm || 0) + '/' + (entry.rpm_limit || '\u221E'));
+        appendCell(tr, (entry.rpd || 0) + '/' + (entry.rpd_limit || '\u221E'));
+        appendCell(tr, (entry.tpm || 0) + '/' + (entry.tpm_limit || '\u221E'));
+        appendCell(tr, (entry.tpd || 0) + '/' + (entry.tpd_limit || '\u221E'));
+
+        var statusTd = document.createElement('td');
+        var limited = entry.rpm_limit > 0 && entry.rpm >= entry.rpm_limit;
+        statusTd.appendChild(makeTag(limited ? 'Limited' : 'OK', limited ? 'tag-yellow' : 'tag-green'));
+        tr.appendChild(statusTd);
+
+        tbody.appendChild(tr);
+      });
+    });
+  }
+
+  // ── Sessions Tab ─────────────────────────────────────────────────
+  async function loadSessions() {
+    var tbody = document.getElementById('sess-tbody');
+    var summary = document.getElementById('sess-summary');
+    if (!tbody) return;
+    try {
+      var resp = await fetch('/api/sessions');
+      if (!resp.ok) return;
+      var data = await resp.json();
+      renderSessions(data, tbody, summary);
+    } catch(e) { console.error('loadSessions error:', e); }
+
+    // Setup cleanup button
+    var cleanupBtn = document.getElementById('sess-cleanup-btn');
+    if (cleanupBtn && !cleanupBtn._bound) {
+      cleanupBtn._bound = true;
+      cleanupBtn.addEventListener('click', async function() {
+        try {
+          var resp = await fetch('/api/sessions/cleanup', { method: 'POST' });
+          if (resp.ok) { var r = await resp.json(); alert('Cleaned up ' + (r.cleaned || 0) + ' expired sessions'); loadSessions(); }
+        } catch(e) { alert('Error: ' + e.message); }
+      });
+    }
+  }
+
+  function renderSessions(data, tbody, summaryEl) {
+    clearEl(tbody);
+    var sessions = data.sessions || [];
+
+    if (summaryEl) {
+      clearEl(summaryEl);
+      [
+        { label: 'Active Sessions', value: sessions.length },
+        { label: 'TTL', value: '30 min' },
+      ].forEach(function(item) {
+        var card = document.createElement('div');
+        card.className = 'stat-card';
+        var lbl = document.createElement('div');
+        lbl.className = 'label';
+        lbl.textContent = item.label;
+        card.appendChild(lbl);
+        var val = document.createElement('div');
+        val.className = 'value';
+        val.style.fontSize = '20px';
+        val.textContent = item.value;
+        card.appendChild(val);
+        summaryEl.appendChild(card);
+      });
+    }
+
+    if (!sessions.length) {
+      addEmptyRow(tbody, 6, 'No active sessions. Sessions are created automatically when you make requests.');
+      return;
+    }
+
+    sessions.forEach(function(sess) {
+      var tr = document.createElement('tr');
+      var idShort = sess.session_id ? sess.session_id.substring(0, 12) + '...' : '-';
+      appendCodeCell(tr, idShort);
+      tr.lastChild.title = sess.session_id || '';
+      appendCell(tr, sess.provider || '-');
+      appendCell(tr, sess.model || '-');
+      appendCell(tr, sess.created_at ? new Date(sess.created_at).toLocaleTimeString() : '-');
+      appendCell(tr, sess.expires_at ? new Date(sess.expires_at).toLocaleTimeString() : '-');
+
+      var td = document.createElement('td');
+      var delBtn = document.createElement('button');
+      delBtn.className = 'btn btn-sm btn-danger';
+      delBtn.textContent = 'Remove';
+      delBtn.addEventListener('click', async function() {
+        try {
+          await fetch('/api/sessions/' + encodeURIComponent(sess.session_id), { method: 'DELETE' });
+          loadSessions();
+        } catch(e) { alert('Error: ' + e.message); }
+      });
+      td.appendChild(delBtn);
+      tr.appendChild(td);
+
+      tbody.appendChild(tr);
+    });
+  }
+
+  // ── Gateway Keys Tab ─────────────────────────────────────────────
+  function setupGatewayKeyForm() {
+    var form = document.getElementById('gwkey-form');
+    if (!form) return;
+    form.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      var name = document.getElementById('gwkey-name');
+      var admin = document.getElementById('gwkey-admin');
+      if (!name || !name.value.trim()) { alert('Enter a key name'); return; }
+
+      try {
+        var resp = await fetch('/api/gateway-keys', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: name.value.trim(),
+            is_admin: admin ? admin.value === 'true' : false
+          })
+        });
+        var result = await resp.json();
+        if (resp.ok && result.raw_key) {
+          alert('Gateway key created!\n\nKey: ' + result.raw_key + '\n\nSave this key - it won\'t be shown again!');
+          name.value = '';
+          loadGatewayKeys();
+        } else {
+          alert(result.detail || 'Failed to create key');
+        }
+      } catch(e) { alert('Error: ' + e.message); }
+    });
+  }
+
+  async function loadGatewayKeys() {
+    var tbody = document.getElementById('gwkey-tbody');
+    if (!tbody) return;
+    try {
+      var resp = await fetch('/api/gateway-keys');
+      if (!resp.ok) return;
+      var data = await resp.json();
+      renderGatewayKeys(data.keys || [], tbody);
+    } catch(e) { console.error('loadGatewayKeys error:', e); }
+  }
+
+  function renderGatewayKeys(keys, tbody) {
+    clearEl(tbody);
+    if (!keys.length) {
+      addEmptyRow(tbody, 6, 'No gateway keys. Create one above to get started.');
+      return;
+    }
+    keys.forEach(function(k) {
+      var tr = document.createElement('tr');
+      appendCodeCell(tr, k.name);
+
+      var statusTd = document.createElement('td');
+      statusTd.appendChild(makeTag(k.enabled ? 'Active' : 'Disabled', k.enabled ? 'tag-green' : 'tag-red'));
+      tr.appendChild(statusTd);
+
+      var adminTd = document.createElement('td');
+      adminTd.appendChild(makeTag(k.is_admin ? 'Admin' : 'User', k.is_admin ? 'tag-yellow' : 'tag-blue'));
+      tr.appendChild(adminTd);
+
+      appendCell(tr, formatNumber(k.request_count || 0));
+      appendCell(tr, k.created_at ? new Date(k.created_at).toLocaleString() : '-');
+
+      var td = document.createElement('td');
+      td.style.cssText = 'display:flex;gap:4px';
+
+      var toggleBtn = document.createElement('button');
+      toggleBtn.className = 'btn btn-sm';
+      toggleBtn.textContent = k.enabled ? 'Disable' : 'Enable';
+      toggleBtn.style.background = k.enabled ? '#d29922' : '#238636';
+      toggleBtn.style.color = '#fff';
+      toggleBtn.addEventListener('click', async function() {
+        try {
+          await fetch('/api/gateway-keys/' + encodeURIComponent(k.name) + '/toggle', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled: !k.enabled })
+          });
+          loadGatewayKeys();
+        } catch(e) { alert('Error: ' + e.message); }
+      });
+      td.appendChild(toggleBtn);
+
+      var delBtn = document.createElement('button');
+      delBtn.className = 'btn btn-sm btn-danger';
+      delBtn.textContent = 'Revoke';
+      delBtn.addEventListener('click', async function() {
+        if (!confirm('Revoke key "' + k.name + '"? This cannot be undone.')) return;
+        try {
+          await fetch('/api/gateway-keys/' + encodeURIComponent(k.name), { method: 'DELETE' });
+          loadGatewayKeys();
+        } catch(e) { alert('Error: ' + e.message); }
+      });
+      td.appendChild(delBtn);
+
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+    });
+  }
+
+
 })();
