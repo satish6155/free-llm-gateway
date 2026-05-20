@@ -93,6 +93,7 @@ class AppConfig:
 
 # Provider definitions: name -> (env_key_for_api_key, base_url_template)
 PROVIDER_DEFS: dict[str, tuple[str, str]] = {
+    # ── Original providers ──
     "openrouter": ("OPENROUTER_KEY", "https://openrouter.ai/api/v1"),
     "github": ("GITHUB_KEY", "https://models.inference.ai.azure.com"),
     "groq": ("GROQ_KEY", "https://api.groq.com/openai/v1"),
@@ -110,16 +111,32 @@ PROVIDER_DEFS: dict[str, tuple[str, str]] = {
     "kilo": ("KILO_KEY", "https://api.kilo.ai/api/gateway"),
     "llm7": ("LLM7_KEY", "https://api.llm7.io/v1"),
     "ollama": ("OLLAMA_KEY", "https://api.ollama.com"),
+    # ── New providers (from freellmapi comparison) ──
+    "deepseek": ("DEEPSEEK_KEY", "https://api.deepseek.com/v1"),
+    "together": ("TOGETHER_KEY", "https://api.together.xyz/v1"),
+    "fireworks": ("FIREWORKS_KEY", "https://api.fireworks.ai/inference/v1"),
+    "sambanova": ("SAMBANOVA_KEY", "https://api.sambanova.ai/v1"),
+    "chutes": ("CHUTES_KEY", "https://chutes.ai/app/api/v1"),
+    "anthropic": ("ANTHROPIC_KEY", "https://api.anthropic.com"),
+    "openai": ("OPENAI_KEY", "https://api.openai.com/v1"),
+    "perplexity": ("PERPLEXITY_KEY", "https://api.perplexity.ai"),
+    "xai": ("XAI_KEY", "https://api.x.ai/v1"),
+    "novita": ("NOVITA_KEY", "https://api.novita.ai/v3/openai"),
 }
 
 # Providers that use OpenAI-compatible chat/completions endpoints
 OPENAI_COMPATIBLE = {
     "openrouter", "github", "groq", "cerebras", "nvidia",
     "siliconflow", "mistral", "llm7", "ollama",
+    "deepseek", "together", "fireworks", "sambanova", "chutes",
+    "openai", "perplexity", "xai", "novita",
 }
 
 # Providers needing special request formatting
-SPECIAL_PROVIDERS = {"cloudflare", "huggingface", "cohere", "google_gemini", "kilo"}
+SPECIAL_PROVIDERS = {
+    "cloudflare", "huggingface", "cohere", "google_gemini", "kilo",
+    "anthropic",
+}
 
 
 def _load_provider_keys(env_key: str) -> list[str]:

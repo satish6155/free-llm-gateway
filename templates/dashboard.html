@@ -69,6 +69,22 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
       Logs
     </div>
+    <div class="nav-item" data-tab="playground">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13,2 3,14 12,14 11,22 21,10 12,10"/></svg>
+      Playground
+    </div>
+    <div class="nav-item" data-tab="ratetracking">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10M18 20V4M6 20v-6"/><circle cx="12" cy="12" r="10"/></svg>
+      Rate Tracking
+    </div>
+    <div class="nav-item" data-tab="sessions">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+      Sessions
+    </div>
+    <div class="nav-item" data-tab="gatewaykeys">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+      Gateway Keys
+    </div>
   </div>
   <div class="sidebar-footer">
     <span id="live-dot" class="live-dot"></span> Live &middot; Auto-refresh 10s
@@ -283,6 +299,18 @@
             <option value="kilo">kilo</option>
             <option value="llm7">llm7</option>
             <option value="ollama">ollama</option>
+            <option value="deepseek">deepseek</option>
+            <option value="together">together</option>
+            <option value="fireworks">fireworks</option>
+            <option value="sambanova">sambanova</option>
+            <option value="chutes">chutes</option>
+            <option value="anthropic">anthropic</option>
+            <option value="openai">openai</option>
+            <option value="perplexity">perplexity</option>
+            <option value="xai">xai</option>
+            <option value="novita">novita</option>
+            <option value="z_ai">z_ai</option>
+            <option value="modelscope">modelscope</option>
           </select>
         </div>
         <div class="form-group" style="flex:1;min-width:240px">
@@ -311,6 +339,113 @@
 
   </div>
 </div>
+
+
+    <!-- Playground Tab -->
+    <div id="tab-playground" class="tab-panel">
+      <div class="page-header">
+        <h2>Playground</h2>
+        <p style="color:var(--text-muted);margin:0">Test models interactively with real-time streaming responses.</p>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div>
+          <div class="form-group" style="margin-bottom:8px">
+            <label>Model</label>
+            <select id="pg-model" style="width:100%;background:var(--bg-card);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px">
+              <option value="">Loading models...</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:8px">
+            <label>System Prompt</label>
+            <textarea id="pg-system" rows="2" placeholder="You are a helpful assistant." style="width:100%;background:var(--bg-card);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-family:monospace;resize:vertical"></textarea>
+          </div>
+          <div class="form-group" style="margin-bottom:8px">
+            <label>Message</label>
+            <textarea id="pg-message" rows="5" placeholder="Type your message here..." style="width:100%;background:var(--bg-card);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-family:monospace;resize:vertical"></textarea>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <label style="color:var(--text-muted);font-size:12px">Temperature: <span id="pg-temp-val">0.7</span></label>
+            <input type="range" id="pg-temp" min="0" max="2" step="0.1" value="0.7" style="flex:1">
+            <label style="color:var(--text-muted);font-size:12px">Max Tokens:</label>
+            <input type="number" id="pg-max-tokens" value="1024" min="1" max="16384" style="width:80px;background:var(--bg-card);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px">
+          </div>
+          <div style="margin-top:12px;display:flex;gap:8px">
+            <button class="btn btn-primary" id="pg-send-btn">Send</button>
+            <button class="btn" id="pg-clear-btn">Clear</button>
+          </div>
+        </div>
+        <div>
+          <label style="display:block;margin-bottom:4px">Response</label>
+          <div id="pg-response" style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:16px;min-height:300px;max-height:500px;overflow-y:auto;font-family:monospace;font-size:13px;white-space:pre-wrap;color:var(--text);line-height:1.6"><span style="color:var(--text-muted)">Response will appear here...</span></div>
+          <div id="pg-meta" style="margin-top:8px;font-size:12px;color:var(--text-muted)"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Rate Tracking Tab -->
+    <div id="tab-ratetracking" class="tab-panel">
+      <div class="page-header">
+        <h2>Per-Key Rate Tracking</h2>
+        <div class="header-actions">
+          <button class="refresh-btn" id="rt-refresh-btn">Refresh</button>
+        </div>
+      </div>
+      <div style="margin-bottom:16px;padding:12px 16px;background:var(--bg-card);border-radius:8px;border:1px solid var(--border)">
+        <p style="margin:0;color:var(--text-muted)">Track RPM/RPD/TPM/TPD usage per provider, model, and API key. Helps stay within free-tier limits.</p>
+      </div>
+      <div id="rt-summary" class="mini-stats"></div>
+      <table>
+        <thead><tr><th>Provider</th><th>Model</th><th>RPM</th><th>RPD</th><th>TPM</th><th>TPD</th><th>Status</th></tr></thead>
+        <tbody id="rt-tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- Sessions Tab -->
+    <div id="tab-sessions" class="tab-panel">
+      <div class="page-header">
+        <h2>Sticky Sessions</h2>
+        <div class="header-actions">
+          <button class="refresh-btn" id="sess-refresh-btn">Refresh</button>
+          <button class="btn btn-danger" id="sess-cleanup-btn">Cleanup Expired</button>
+        </div>
+      </div>
+      <div style="margin-bottom:16px;padding:12px 16px;background:var(--bg-card);border-radius:8px;border:1px solid var(--border)">
+        <p style="margin:0;color:var(--text-muted)">Sticky sessions maintain provider affinity for 30 minutes, ensuring conversation continuity with the same model provider.</p>
+      </div>
+      <div id="sess-summary" class="mini-stats"></div>
+      <table>
+        <thead><tr><th>Session ID</th><th>Provider</th><th>Model</th><th>Created</th><th>Expires</th><th>Actions</th></tr></thead>
+        <tbody id="sess-tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- Gateway Keys Tab -->
+    <div id="tab-gatewaykeys" class="tab-panel">
+      <div class="page-header">
+        <h2>Gateway API Keys</h2>
+      </div>
+      <div style="margin-bottom:16px;padding:12px 16px;background:var(--bg-card);border-radius:8px;border:1px solid var(--border)">
+        <p style="margin:0;color:var(--text-muted)">Create gateway API keys (fgk-...) to control access with per-key permissions, model restrictions, and rate limits.</p>
+      </div>
+      <form id="gwkey-form" style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-bottom:16px;align-items:end">
+        <div class="form-group">
+          <label>Key Name</label>
+          <input type="text" id="gwkey-name" placeholder="my-user" style="width:100%;background:var(--bg-card);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px">
+        </div>
+        <div class="form-group">
+          <label>Admin Key</label>
+          <select id="gwkey-admin" style="width:100%;background:var(--bg-card);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px">
+            <option value="false">Regular User</option>
+            <option value="true">Admin</option>
+          </select>
+        </div>
+        <button type="submit" class="btn btn-primary">Create Key</button>
+      </form>
+      <table>
+        <thead><tr><th>Name</th><th>Status</th><th>Admin</th><th>Requests</th><th>Created</th><th>Actions</th></tr></thead>
+        <tbody id="gwkey-tbody"></tbody>
+      </table>
+    </div>
 
 <script src="/static/app.js?v=8"></script>
 </body>

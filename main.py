@@ -36,6 +36,11 @@ from format_translator import detect_format, translate_to_openai, translate_resp
 from custom_combos import combo_manager
 from quota_tracker import quota_tracker
 from oauth_manager import oauth_manager
+from rate_tracker import per_key_rate_tracker, PROVIDER_FREE_LIMITS
+from sticky_sessions import sticky_sessions
+from gateway_auth import gateway_auth, GatewayAuthManager
+from tool_call_translator import prepare_tools_for_provider
+from key_encryptor import EncryptedKeyStore
 
 logging.basicConfig(
     level=logging.INFO,
@@ -55,6 +60,14 @@ benchmark_runner = BenchmarkRunner(config)
 benchmark_results = benchmark_runner.get_results()
 # Smart router for model aliases
 smart_default = SmartDefault(config.models, benchmark_results)
+# New feature modules
+encrypted_key_store = EncryptedKeyStore(config.master_key or "default-key")
+if config.master_key:
+    import gateway_auth as _gw_mod
+    _gw_mod.gateway_auth = GatewayAuthManager(encryption_key=config.master_key)
+    gateway_auth = _gw_mod.gateway_auth
+else:
+    gateway_auth = None
 
 # Shared httpx client (reused across requests for connection pooling)
 _client: httpx.AsyncClient | None = None
@@ -96,6 +109,20 @@ async def lifespan(app: FastAPI):
     # Merge custom combos into model config
     combo_manager.merge_into_config(config.models)
 
+    # Initialize per-key rate limits from known free tier limits
+    for prov_name, model_limits in PROVIDER_FREE_LIMITS.items():
+        for model_key, limits in model_limits.items():
+            provider = config.providers.get(prov_name)
+            if provider and provider.api_key:
+                per_key_rate_tracker.set_limits(
+                    prov_name, model_key, provider.api_key,
+                    rpm=limits.rpm, rpd=limits.rpd,
+                    tpm=limits.tpm, tpd=limits.tpd,
+                )
+
+    # Start sticky session cleanup loop
+    sticky_sessions.start_cleanup_loop()
+
     # Startup complete
 
     # Start request queue workers
@@ -111,6 +138,7 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     await request_queue.stop_workers()
+    await sticky_sessions.stop_cleanup()
     usage_tracker.flush()
     await health_checker.stop()
     if _client:
@@ -125,13 +153,24 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # ── Auth middleware ───────────────────────────────────────────────────────────
 def verify_master_key(authorization: str | None) -> None:
-    if not config.master_key:
-        return  # no auth if MASTER_KEY not set
+    if not config.master_key and not gateway_auth:
+        return  # no auth if nothing configured
     if not authorization:
         raise HTTPException(401, "Missing Authorization header")
     token = authorization.removeprefix("Bearer ").strip()
-    if token != config.master_key:
-        raise HTTPException(401, "Invalid API key")
+
+    # Check unified gateway API key first
+    if gateway_auth and token.startswith(GatewayAuthManager.GATEWAY_KEY_PREFIX):
+        gw_key = gateway_auth.validate_key(token)
+        if gw_key and gw_key.enabled:
+            return
+        raise HTTPException(401, "Invalid gateway API key")
+
+    # Fall back to master key
+    if config.master_key and token == config.master_key:
+        return
+
+    raise HTTPException(401, "Invalid API key")
 
 
 # ── Chat completions ─────────────────────────────────────────────────────────
@@ -201,12 +240,43 @@ async def chat_completions(request: Request, authorization: str | None = Header(
             cached.setdefault("model", model)
             return JSONResponse(content=cached, headers=cache_headers)
 
+    # ── Sticky sessions: prefer same provider for conversation ──
+    messages = body.get("messages", [])
+    conversation_id = body.get("conversation_id") or sticky_sessions.extract_conversation_id(messages)
+    preferred_provider, preferred_model = None, None
+    if conversation_id:
+        preferred_provider, preferred_model = sticky_sessions.get(conversation_id)
+
+    # ── Tool calling translation for Gemini ──
+    tools = body.get("tools")
+    if tools:
+        # Store original tools for response compatibility
+        body["_original_tools"] = tools
+
     # ── Route request ──
+    fallback_attempts: list[str] = []
     try:
         result, provider, provider_model = await router.route_request(model, body, _client)
     except AllRateLimitedError:
         # All providers rate-limited → queue the request
         return await _handle_rate_limited(model, body, stream)
+
+    # Track fallback attempts for routing headers
+    fallback_attempts.append(f"{provider}/{provider_model}")
+
+    # ── Record sticky session ──
+    if conversation_id:
+        sticky_sessions.set(conversation_id, provider, provider_model)
+
+    # ── Per-key rate tracking ──
+    prov_cfg = config.providers.get(provider)
+    if prov_cfg and prov_cfg.api_key:
+        total_tokens = 0
+        if isinstance(result, dict):
+            usage = result.get("usage")
+            if usage and isinstance(usage, dict):
+                total_tokens = usage.get("total_tokens", 0) or 0
+        per_key_rate_tracker.record_request(provider, provider_model, prov_cfg.api_key, tokens=total_tokens)
 
     # ── Record token usage ──
     if isinstance(result, dict):
@@ -227,6 +297,12 @@ async def chat_completions(request: Request, authorization: str | None = Header(
             response_cache.put(cache_key, result)
 
     # ── Return response ──
+    routing_headers = {
+        "X-Routed-Via": f"{provider}/{provider_model}",
+        "X-Fallback-Attempts": str(len(fallback_attempts)),
+        "X-Sticky-Session": "true" if conversation_id and preferred_provider == provider else "false",
+    }
+
     if stream and hasattr(result, "__aiter__"):
         return StreamingResponse(
             result,
@@ -238,6 +314,7 @@ async def chat_completions(request: Request, authorization: str | None = Header(
                 "X-Provider-Model": provider_model,
                 "X-Cache": "BYPASS",
                 "X-Source-Format": source_format,
+                **routing_headers,
             },
         )
 
@@ -247,6 +324,7 @@ async def chat_completions(request: Request, authorization: str | None = Header(
     cache_headers["X-Provider"] = provider
     cache_headers["X-Provider-Model"] = provider_model
     cache_headers["X-Source-Format"] = source_format
+    cache_headers.update(routing_headers)
     return JSONResponse(content=result, headers=cache_headers)
 
 
@@ -450,6 +528,9 @@ async def api_status():
         "quotas": quota_tracker.get_dashboard_summary(),
         "combos": combo_manager.list_combos(),
         "oauth": oauth_manager.list_connections(),
+        "per_key_rates": per_key_rate_tracker.get_all_usage(),
+        "sessions": sticky_sessions.get_stats(),
+        "gateway_auth": gateway_auth.get_stats() if gateway_auth else {"total_keys": 0},
     }
 
 
@@ -1403,6 +1484,265 @@ async def batch_requests(request: Request, authorization: str | None = Header(No
         *[_process_batch_item(i, req) for i, req in enumerate(requests_list)]
     )
     return {"object": "batch", "results": list(results)}
+
+
+# ── Per-Key Rate Tracking API ────────────────────────────────────────────────
+@app.get("/api/rate-tracking")
+async def api_rate_tracking(authorization: str | None = Header(None)):
+    """Get per-key rate tracking for all providers."""
+    verify_master_key(authorization)
+    return {
+        "usage": per_key_rate_tracker.get_all_usage(),
+        "known_limits": {
+            prov: {mk: {"rpm": l.rpm, "rpd": l.rpd, "tpm": l.tpm, "tpd": l.tpd}
+                   for mk, l in models.items()}
+            for prov, models in PROVIDER_FREE_LIMITS.items()
+        },
+    }
+
+
+@app.get("/api/rate-tracking/{provider}")
+async def api_rate_tracking_provider(provider: str, authorization: str | None = Header(None)):
+    """Get per-key rate tracking for a specific provider."""
+    verify_master_key(authorization)
+    return {"provider": provider, "usage": per_key_rate_tracker.get_provider_usage(provider)}
+
+
+@app.post("/api/rate-tracking/set-limits")
+async def api_set_rate_limits(request: Request, authorization: str | None = Header(None)):
+    """Set rate limits for a (provider, model, key)."""
+    verify_master_key(authorization)
+    body = await request.json()
+    provider = body.get("provider", "")
+    model = body.get("model", "default")
+    api_key = body.get("key", "")
+    if not provider or not api_key:
+        raise HTTPException(400, "Missing 'provider' or 'key'")
+    per_key_rate_tracker.set_limits(
+        provider, model, api_key,
+        rpm=body.get("rpm", 0), rpd=body.get("rpd", 0),
+        tpm=body.get("tpm", 0), tpd=body.get("tpd", 0),
+    )
+    return {"ok": True}
+
+
+@app.post("/api/rate-tracking/cleanup")
+async def api_rate_tracking_cleanup(authorization: str | None = Header(None)):
+    """Clean up expired rate tracking entries."""
+    verify_master_key(authorization)
+    removed = per_key_rate_tracker.cleanup_expired()
+    return {"removed": removed}
+
+
+# ── Sticky Sessions API ──────────────────────────────────────────────────────
+@app.get("/api/sessions")
+async def api_sessions(authorization: str | None = Header(None)):
+    """Get all active sticky sessions."""
+    verify_master_key(authorization)
+    return {
+        "sessions": sticky_sessions.get_all(),
+        "stats": sticky_sessions.get_stats(),
+    }
+
+
+@app.delete("/api/sessions/{conversation_id}")
+async def api_session_remove(conversation_id: str, authorization: str | None = Header(None)):
+    """Remove a sticky session."""
+    verify_master_key(authorization)
+    if not sticky_sessions.remove(conversation_id):
+        raise HTTPException(404, "Session not found")
+    return {"ok": True}
+
+
+@app.post("/api/sessions/cleanup")
+async def api_sessions_cleanup(authorization: str | None = Header(None)):
+    """Clean up expired sessions."""
+    verify_master_key(authorization)
+    removed = sticky_sessions.cleanup_expired()
+    return {"removed": removed}
+
+
+# ── Gateway Auth API ─────────────────────────────────────────────────────────
+@app.get("/api/gateway-keys")
+async def api_gateway_keys(authorization: str | None = Header(None)):
+    """List all gateway API keys."""
+    verify_master_key(authorization)
+    if not gateway_auth:
+        return {"keys": [], "stats": {"total_keys": 0}}
+    return {"keys": gateway_auth.list_keys(), "stats": gateway_auth.get_stats()}
+
+
+@app.post("/api/gateway-keys")
+async def api_create_gateway_key(request: Request, authorization: str | None = Header(None)):
+    """Create a new gateway API key."""
+    verify_master_key(authorization)
+    if not gateway_auth:
+        raise HTTPException(400, "Gateway auth not configured (set MASTER_KEY)")
+    body = await request.json()
+    name = body.get("name", "").strip()
+    if not name:
+        raise HTTPException(400, "Missing 'name' field")
+    raw_key, gw_key = gateway_auth.create_key(
+        name,
+        allowed_models=body.get("allowed_models", []),
+        allowed_providers=body.get("allowed_providers", []),
+        max_rpm=body.get("max_rpm", 0),
+        max_tpm=body.get("max_tpm", 0),
+        is_admin=body.get("is_admin", False),
+    )
+    return {"ok": True, "key": raw_key, "name": gw_key.name, "warning": "Save this key — it won't be shown again!"}
+
+
+@app.delete("/api/gateway-keys/{name}")
+async def api_revoke_gateway_key(name: str, authorization: str | None = Header(None)):
+    """Revoke a gateway API key."""
+    verify_master_key(authorization)
+    if not gateway_auth:
+        raise HTTPException(400, "Gateway auth not configured")
+    if not gateway_auth.revoke_key(name):
+        raise HTTPException(404, f"Key '{name}' not found")
+    return {"ok": True}
+
+
+@app.put("/api/gateway-keys/{name}/toggle")
+async def api_toggle_gateway_key(name: str, request: Request, authorization: str | None = Header(None)):
+    """Enable or disable a gateway key."""
+    verify_master_key(authorization)
+    if not gateway_auth:
+        raise HTTPException(400, "Gateway auth not configured")
+    body = await request.json()
+    enabled = body.get("enabled", True)
+    if not gateway_auth.toggle_key(name, enabled):
+        raise HTTPException(404, f"Key '{name}' not found")
+    return {"ok": True, "name": name, "enabled": enabled}
+
+
+# ── Encrypted Key Storage API ────────────────────────────────────────────────
+@app.get("/api/encrypted-keys")
+async def api_encrypted_keys(authorization: str | None = Header(None)):
+    """List encrypted keys (masked)."""
+    verify_master_key(authorization)
+    return {"keys": encrypted_key_store.list_keys()}
+
+
+@app.post("/api/encrypted-keys")
+async def api_add_encrypted_key(request: Request, authorization: str | None = Header(None)):
+    """Add a key to encrypted storage."""
+    verify_master_key(authorization)
+    body = await request.json()
+    provider = body.get("provider", "").strip()
+    key = body.get("key", "").strip()
+    if not provider or not key:
+        raise HTTPException(400, "Missing 'provider' or 'key'")
+    index = encrypted_key_store.add_key(provider, key)
+    # Also sync to config
+    prov = config.providers.get(provider)
+    if prov:
+        all_keys = encrypted_key_store.get_keys(provider)
+        prov.api_keys = all_keys
+    return {"ok": True, "provider": provider, "index": index}
+
+
+@app.delete("/api/encrypted-keys/{provider}/{index}")
+async def api_remove_encrypted_key(provider: str, index: int, authorization: str | None = Header(None)):
+    """Remove a key from encrypted storage."""
+    verify_master_key(authorization)
+    if not encrypted_key_store.remove_key(provider, index):
+        raise HTTPException(404, "Key not found")
+    # Sync to config
+    prov = config.providers.get(provider)
+    if prov:
+        remaining = encrypted_key_store.get_keys(provider)
+        prov.api_keys = remaining
+    return {"ok": True}
+
+
+# ── Playground API ───────────────────────────────────────────────────────────
+@app.post("/api/playground")
+async def api_playground(request: Request, authorization: str | None = Header(None)):
+    """Interactive playground: send messages and get streaming responses.
+
+    Accepts the same body as /v1/chat/completions but returns
+    a JSON response with full metadata for the playground UI.
+    """
+    verify_master_key(authorization)
+    body = await request.json()
+    model = body.get("model", "")
+    stream = body.get("stream", False)
+
+    if not model:
+        model = "llama-3.3-70b"
+        body["model"] = model
+
+    # Detect and translate format
+    source_format = detect_format(body)
+    if source_format != "openai":
+        body = translate_to_openai(body, source_format)
+
+    # Resolve model
+    resolved = smart_router.resolve(model)
+    model = resolved.resolved_name
+
+    # Route with fallback tracking
+    fallback_attempts: list[str] = []
+    try:
+        result, provider, provider_model = await router.route_request(model, body, _client)
+    except AllRateLimitedError:
+        raise HTTPException(429, "All providers rate-limited. Try again later.")
+    except Exception as e:
+        raise HTTPException(502, f"Request failed: {e}")
+
+    fallback_attempts.append(f"{provider}/{provider_model}")
+
+    # For streaming, return SSE
+    if stream and hasattr(result, "__aiter__"):
+        return StreamingResponse(
+            result,
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Routed-Via": f"{provider}/{provider_model}",
+                "X-Fallback-Attempts": str(len(fallback_attempts)),
+            },
+        )
+
+    # For non-streaming, wrap with playground metadata
+    response_data = result if isinstance(result, dict) else {"content": str(result)}
+    if isinstance(response_data, dict):
+        response_data.setdefault("model", provider_model)
+
+    return {
+        "response": response_data,
+        "metadata": {
+            "model_requested": body.get("model", ""),
+            "model_resolved": model,
+            "provider": provider,
+            "provider_model": provider_model,
+            "source_format": source_format,
+            "routed_via": f"{provider}/{provider_model}",
+            "fallback_attempts": fallback_attempts,
+        },
+    }
+
+
+# ── Tool Calling Translation API ────────────────────────────────────────────
+@app.post("/api/translate-tools")
+async def api_translate_tools(request: Request, authorization: str | None = Header(None)):
+    """Translate tool/function calling definitions between provider formats."""
+    verify_master_key(authorization)
+    body = await request.json()
+    tools = body.get("tools", [])
+    target_provider = body.get("target_provider", "openai")
+
+    if not tools:
+        raise HTTPException(400, "Missing 'tools' field")
+
+    translated = prepare_tools_for_provider(tools, target_provider)
+    return {
+        "source_format": "openai",
+        "target_provider": target_provider,
+        "translated": translated,
+    }
 
 
 # ── Entry point ──────────────────────────────────────────────────────────────
