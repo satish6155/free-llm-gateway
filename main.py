@@ -35,12 +35,14 @@ from token_compressor import compress_messages
 from format_translator import detect_format, translate_to_openai, translate_response, FormatType
 from custom_combos import combo_manager
 from quota_tracker import quota_tracker
+from request_db import request_db
 from oauth_manager import oauth_manager
 from rate_tracker import per_key_rate_tracker, PROVIDER_FREE_LIMITS
 from sticky_sessions import sticky_sessions
 from gateway_auth import gateway_auth, GatewayAuthManager
 from tool_call_translator import prepare_tools_for_provider
 from key_encryptor import EncryptedKeyStore
+from pydantic import BaseModel, Field, field_validator, ValidationError
 
 logging.basicConfig(
     level=logging.INFO,
@@ -123,6 +125,9 @@ async def lifespan(app: FastAPI):
     # Start sticky session cleanup loop
     sticky_sessions.start_cleanup_loop()
 
+    # Initialize SQLite request log
+    request_db.init()
+
     # Startup complete
 
     # Start request queue workers
@@ -140,6 +145,7 @@ async def lifespan(app: FastAPI):
     await request_queue.stop_workers()
     await sticky_sessions.stop_cleanup()
     usage_tracker.flush()
+    request_db.close()
     await health_checker.stop()
     if _client:
         await _client.aclose()
@@ -149,6 +155,87 @@ app = FastAPI(title="Free LLM Gateway", version="1.0.0", lifespan=lifespan)
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+# ── Request validation (Pydantic models) ──────────────────────────────────────
+
+class ChatCompletionRequest(BaseModel):
+    """Validates incoming chat completion requests before routing to providers.
+
+    Modeled after the OpenAI /v1/chat/completions spec. Invalid requests
+    are rejected with 400 errors before they ever hit upstream providers.
+    """
+    messages: list[dict[str, Any]] = Field(..., min_length=1)
+    model: str | None = None
+    temperature: float = Field(default=0, ge=0, le=2)
+    max_tokens: int | None = Field(default=None, gt=0)
+    top_p: float | None = Field(default=None, ge=0, le=1)
+    stream: bool = False
+    tools: list[dict[str, Any]] | None = None
+    tool_choice: str | dict[str, Any] | None = None
+    parallel_tool_calls: bool | None = None
+    frequency_penalty: float | None = Field(default=None, ge=-2, le=2)
+    presence_penalty: float | None = Field(default=None, ge=-2, le=2)
+    stop: str | list[str] | None = None
+    n: int | None = Field(default=None, gt=0)
+    conversation_id: str | None = None
+
+    @field_validator("messages")
+    @classmethod
+    def validate_messages(cls, v: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        valid_roles = {"system", "user", "assistant", "tool"}
+        for i, msg in enumerate(v):
+            role = msg.get("role")
+            if role not in valid_roles:
+                raise ValueError(
+                    f"messages[{i}].role must be one of {valid_roles}, got '{role}'"
+                )
+            # Assistant messages need content or tool_calls
+            if role == "assistant":
+                has_content = (
+                    isinstance(msg.get("content"), str) and len(msg["content"]) > 0
+                )
+                has_tool_calls = bool(msg.get("tool_calls"))
+                if not has_content and not has_tool_calls:
+                    raise ValueError(
+                        f"messages[{i}] (assistant) must have non-empty content or tool_calls"
+                    )
+            # Tool messages need tool_call_id
+            if role == "tool" and not msg.get("tool_call_id"):
+                raise ValueError(
+                    f"messages[{i}] (tool) must include 'tool_call_id'"
+                )
+        return v
+
+
+async def safe_stream(
+    stream: Any, provider: str, provider_model: str,
+) -> AsyncIterator[bytes]:
+    """Wrap a provider stream to catch mid-stream errors.
+
+    If the upstream connection breaks mid-stream, we emit an SSE error
+    frame + [DONE] so the client sees a clean signal instead of a
+    silently truncated stream.
+    """
+    import json as _json
+
+    try:
+        async for chunk in stream:
+            yield chunk
+    except Exception as exc:
+        logger.error(
+            "Mid-stream error from %s/%s: %s",
+            provider, provider_model, exc,
+        )
+        # Emit an SSE error frame so the client knows what happened
+        error_payload = _json.dumps({
+            "error": {
+                "message": f"Provider error ({provider}/{provider_model}): stream interrupted",
+                "type": "stream_error",
+            },
+        })
+        yield f"data: {error_payload}\n\n".encode()
+        yield b"data: [DONE]\n\n"
 
 
 # ── Auth middleware ───────────────────────────────────────────────────────────
@@ -166,8 +253,10 @@ def verify_master_key(authorization: str | None) -> None:
             return
         raise HTTPException(401, "Invalid gateway API key")
 
-    # Fall back to master key
-    if config.master_key and token == config.master_key:
+    # Fall back to master key — use constant-time comparison to prevent
+    # timing attacks that could recover the key byte-by-byte.
+    import hmac
+    if config.master_key and hmac.compare_digest(token, config.master_key):
         return
 
     raise HTTPException(401, "Invalid API key")
@@ -177,9 +266,27 @@ def verify_master_key(authorization: str | None) -> None:
 @app.post("/v1/chat/completions")
 async def chat_completions(request: Request, authorization: str | None = Header(None)):
     verify_master_key(authorization)
-    body = await request.json()
-    model = body.get("model", "")
-    stream = body.get("stream", False)
+    raw_body = await request.json()
+
+    # ── Input validation: reject malformed requests early ──
+    try:
+        validated = ChatCompletionRequest(**raw_body)
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": f"Invalid request: {e.error_count()} error(s)",
+                "type": "invalid_request_error",
+                "errors": [
+                    {"field": str(loc), "message": err["msg"]}
+                    for loc, err in e.errors()
+                ],
+            },
+        )
+
+    body = raw_body  # keep full body for downstream compatibility
+    model = validated.model or ""
+    stream = validated.stream
 
     # ── Format translation: auto-detect and normalize to OpenAI ──
     source_format = detect_format(body)
@@ -305,7 +412,7 @@ async def chat_completions(request: Request, authorization: str | None = Header(
 
     if stream and hasattr(result, "__aiter__"):
         return StreamingResponse(
-            result,
+            safe_stream(result, provider, provider_model),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",
@@ -1010,6 +1117,58 @@ async def api_analytics(authorization: str | None = Header(None)):
     }
 
 
+# ── Rich Analytics API (SQLite-backed) ───────────────────────────────────────
+
+VALID_RANGES = {"24h", "7d", "30d"}
+
+
+@app.get("/api/analytics/summary")
+async def analytics_summary(
+    range: str = "7d", authorization: str | None = Header(None),
+):
+    verify_master_key(authorization)
+    r = range if range in VALID_RANGES else "7d"
+    return request_db.get_summary(r)
+
+
+@app.get("/api/analytics/by-model")
+async def analytics_by_model(
+    range: str = "7d", authorization: str | None = Header(None),
+):
+    verify_master_key(authorization)
+    r = range if range in VALID_RANGES else "7d"
+    return request_db.get_by_model(r)
+
+
+@app.get("/api/analytics/by-provider")
+async def analytics_by_provider(
+    range: str = "7d", authorization: str | None = Header(None),
+):
+    verify_master_key(authorization)
+    r = range if range in VALID_RANGES else "7d"
+    return request_db.get_by_provider(r)
+
+
+@app.get("/api/analytics/timeline")
+async def analytics_timeline(
+    range: str = "7d", interval: str = "day",
+    authorization: str | None = Header(None),
+):
+    verify_master_key(authorization)
+    r = range if range in VALID_RANGES else "7d"
+    iv = interval if interval in ("hour", "day") else "day"
+    return request_db.get_timeline(r, iv)
+
+
+@app.get("/api/analytics/errors")
+async def analytics_errors(
+    range: str = "7d", authorization: str | None = Header(None),
+):
+    verify_master_key(authorization)
+    r = range if range in VALID_RANGES else "7d"
+    return request_db.get_errors(r)
+
+
 # ── Key Health API ───────────────────────────────────────────────────────────
 @app.post("/api/keys/validate-all")
 async def api_validate_all_keys(authorization: str | None = Header(None)):
@@ -1079,6 +1238,123 @@ async def api_validate_all_keys(authorization: str | None = Header(None)):
             "error": sum(1 for r in results.values() if r["status"] == "error"),
         },
         "results": results,
+    }
+
+
+# ── Fallback Chain API ───────────────────────────────────────────────────────
+
+@app.get("/api/fallbacks")
+async def api_get_fallbacks(authorization: str | None = Header(None)):
+    """Get current fallback chains for all models with penalty info."""
+    verify_master_key(authorization)
+    result = []
+    for model_name, model_cfg in config.models.items():
+        providers = []
+        for fb in model_cfg.fallbacks:
+            penalty = router.penalty_tracker.get_penalty(fb.provider, fb.model)
+            providers.append({
+                "provider": fb.provider,
+                "model": fb.model,
+                "enabled": fb.enabled,
+                "penalty": penalty,
+            })
+        result.append({"model": model_name, "providers": providers})
+    return result
+
+
+@app.put("/api/fallbacks/{model}")
+async def api_update_fallbacks(
+    model: str,
+    request: Request,
+    authorization: str | None = Header(None),
+):
+    """Reorder or enable/disable fallbacks for a specific model."""
+    verify_master_key(authorization)
+    model_cfg = config.models.get(model)
+    if not model_cfg:
+        raise HTTPException(404, f"Model '{model}' not found")
+
+    body = await request.json()
+    if not isinstance(body, list):
+        raise HTTPException(400, "Body must be a list of fallback entries")
+
+    # Build a lookup from the incoming order
+    incoming = {
+        (entry["provider"], entry["model"]): entry
+        for entry in body
+        if "provider" in entry and "model" in entry
+    }
+
+    # Update enabled state on existing fallbacks and reorder
+    new_fallbacks: list = []
+    for entry in body:
+        provider = entry.get("provider", "")
+        provider_model = entry.get("model", "")
+        enabled = entry.get("enabled", True)
+        # Find matching existing fallback or create new
+        existing = next(
+            (fb for fb in model_cfg.fallbacks
+             if fb.provider == provider and fb.model == provider_model),
+            None,
+        )
+        if existing:
+            existing.enabled = enabled
+            new_fallbacks.append(existing)
+        else:
+            from config import ModelFallback
+            new_fallbacks.append(ModelFallback(
+                provider=provider, model=provider_model, enabled=enabled,
+            ))
+
+    model_cfg.fallbacks = new_fallbacks
+    return {"success": True, "model": model, "fallbacks": len(new_fallbacks)}
+
+
+@app.post("/api/fallbacks/{model}/sort/{preset}")
+async def api_sort_fallbacks(
+    model: str,
+    preset: str,
+    authorization: str | None = Header(None),
+):
+    """Sort fallbacks by preset: priority (original), penalty, health."""
+    verify_master_key(authorization)
+    model_cfg = config.models.get(model)
+    if not model_cfg:
+        raise HTTPException(404, f"Model '{model}' not found")
+
+    if preset == "penalty":
+        # Sort by ascending penalty (least penalized first)
+        model_cfg.fallbacks.sort(
+            key=lambda fb: router.penalty_tracker.get_penalty(fb.provider, fb.model),
+        )
+    elif preset == "health":
+        # Sort: enabled first, then by health (healthy first)
+        def _health_key(fb: Any) -> int:
+            if not fb.enabled:
+                return 1000
+            if router.health_checker and not router.health_checker.is_available(fb.provider):
+                return 500
+            return router.penalty_tracker.get_penalty(fb.provider, fb.model)
+        model_cfg.fallbacks.sort(key=_health_key)
+    elif preset == "priority":
+        # Reset to original order — no-op (already in original order)
+        pass
+    else:
+        raise HTTPException(400, f"Unknown preset '{preset}'. Use: priority, penalty, health")
+
+    return {
+        "success": True,
+        "model": model,
+        "preset": preset,
+        "fallbacks": [
+            {
+                "provider": fb.provider,
+                "model": fb.model,
+                "enabled": fb.enabled,
+                "penalty": router.penalty_tracker.get_penalty(fb.provider, fb.model),
+            }
+            for fb in model_cfg.fallbacks
+        ],
     }
 
 
@@ -1697,7 +1973,7 @@ async def api_playground(request: Request, authorization: str | None = Header(No
     # For streaming, return SSE
     if stream and hasattr(result, "__aiter__"):
         return StreamingResponse(
-            result,
+            safe_stream(result, provider, provider_model),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",

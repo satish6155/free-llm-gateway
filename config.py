@@ -65,6 +65,7 @@ class ProviderConfig:
 class ModelFallback:
     provider: str
     model: str
+    enabled: bool = True
 
 
 @dataclass

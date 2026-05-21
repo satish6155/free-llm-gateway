@@ -1,4 +1,4 @@
-# Free LLM Gateway 🔑
+# Free LLM Gateway
 
 A unified OpenAI-compatible API server that aggregates **24+ free LLM providers** into one endpoint. Configure your free API keys in `.env`, then use **one base URL + one master key** to access every model.
 
@@ -12,7 +12,7 @@ A unified OpenAI-compatible API server that aggregates **24+ free LLM providers*
 - **260+ free models** — auto-discovered from all providers
 - **Automatic fallback** — if one provider fails (rate limit, error, timeout), tries the next
 - **Round-robin load balancing** — distributes requests across providers
-- **Streaming support** — full SSE passthrough
+- **Streaming support** — full SSE passthrough with mid-stream error handling
 - **Smart routing** — 60+ model aliases (type "gpt-4" → best available model)
 - **Batch requests** — fan out multiple requests in parallel
 
@@ -21,16 +21,30 @@ A unified OpenAI-compatible API server that aggregates **24+ free LLM providers*
 - **Unified gateway API keys** — `fgk-...` prefixed keys with per-key model/provider restrictions and admin roles
 - **Per-key rate tracking** — RPM/RPD/TPM/TPD monitoring with rolling time windows and provider free-tier limits
 - **Key health validation** — one-click test all API keys
+- **Timing-safe key comparison** — constant-time auth to prevent timing attacks
 
-### Routing & Sessions
+### Routing & Reliability
 - **Sticky sessions** — 30-minute provider affinity for conversation continuity
 - **Routing headers** — `X-Routed-Via`, `X-Fallback-Attempts`, `X-Sticky-Session` on every response
 - **Tool/function calling translation** — automatic OpenAI ↔ Gemini functionDeclarations conversion
+- **Dynamic penalty routing** — providers returning 429s sink in priority; penalties decay over time
+- **Per-key cooldown** — rate-limited keys are temporarily skipped until cooldown expires
+- **Retry with backoff** — exponential backoff on 500/502/503 errors, Retry-After support on 429s
+- **Runtime fallback editing** — reorder, enable/disable fallbacks via API without restart
+- **Sort presets** — sort fallbacks by priority, penalty score, or health status
 
-### Dashboard & Analytics
-- **Web dashboard** — 16 tabs: Models, Providers, Usage, Analytics, Benchmarks, Cache, Combos, Quotas, OAuth, Setup, Keys, Logs, Playground, Rate Tracking, Sessions, Gateway Keys
+### Analytics & Persistence
+- **SQLite request log** — every routed request persisted to disk, survives restarts
+- **Rich analytics API** — 5 dedicated endpoints: summary, by-model, by-provider, timeline, errors
+- **Time range filtering** — query analytics for 24h, 7d, or 30d windows
+- **Error categorization** — rate-limited, timeout, auth, server errors auto-categorized
+- **Estimated cost savings** — GPT-4o pricing comparison ($3/M input, $15/M output)
+- **Usage analytics** — usage tracking, token counts, provider success rates
+
+### Dashboard
+- **Web dashboard** — 18 tabs: Models, Providers, Usage, Analytics, Rich Analytics, Benchmarks, Cache, Combos, Quotas, OAuth, Setup, Keys, Logs, Playground, Rate Tracking, Sessions, Gateway Keys, Fallbacks
 - **Interactive playground** — test models directly from the dashboard with real-time responses
-- **Analytics** — usage tracking, estimated savings, provider success rates
+- **Fallback editor** — visually reorder and toggle fallback chains from the dashboard
 - **Auto-sync** — pulls new free models from [awesome-free-llm-apis](https://github.com/mnfst/awesome-free-llm-apis)
 - **Docker support** — one command to deploy
 
@@ -187,6 +201,26 @@ Point any tool that supports custom OpenAI base URLs to `http://localhost:8080/v
 | `/api/playground` | POST | Interactive model testing |
 | `/api/translate-tools` | POST | Tool format translation |
 
+### Rich Analytics (SQLite-backed)
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/analytics/summary?range=7d` | GET | Total requests, success rate, tokens, latency, savings |
+| `/api/analytics/by-model?range=7d` | GET | Stats grouped by provider+model |
+| `/api/analytics/by-provider?range=7d` | GET | Stats grouped by provider |
+| `/api/analytics/timeline?range=7d&interval=day` | GET | Time-bucketed request counts |
+| `/api/analytics/errors?range=7d` | GET | Error distribution by category + recent errors |
+
+Ranges: `24h`, `7d`, `30d`
+
+### Fallback Management
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/fallbacks` | GET | Get all fallback chains with penalty info |
+| `/api/fallbacks/{model}` | PUT | Reorder or toggle fallbacks for a model |
+| `/api/fallbacks/{model}/sort/{preset}` | POST | Sort by preset: `priority`, `penalty`, `health` |
+
 ### Rate Tracking
 
 | Endpoint | Method | Description |
@@ -241,17 +275,24 @@ docker-compose up -d
 
 ```
 Any AI Tool → Gateway (localhost:8080)
-               ├── Auth check (MASTER_KEY or fgk- gateway keys)
+               ├── Auth check (timing-safe, MASTER_KEY or fgk- gateway keys)
                ├── Per-key rate limiting (RPM/RPD/TPM/TPD)
                ├── AES-256-GCM encrypted key storage
                ├── Smart routing with 60+ aliases
                ├── Round-robin load balancing
+               ├── Dynamic penalty routing (429s sink priority)
+               ├── Per-key cooldown on rate limits
+               ├── Retry with exponential backoff (500/502/503)
                ├── Sticky sessions (30-min affinity)
                ├── Tool calling translation (OpenAI ↔ Gemini)
+               ├── Streaming with mid-stream error handling
                ├── Rate limit tracking per provider
                ├── Auto-fallback on failure
+               ├── Runtime fallback chain editing (API)
                ├── Response caching (LRU + TTL)
                ├── Request queuing with backoff
+               ├── SQLite persistent request log
+               ├── Rich analytics API (5 endpoints)
                ├── Routing headers (X-Routed-Via, X-Fallback-Attempts)
                └── Usage analytics + savings tracker
 ```
@@ -263,7 +304,7 @@ pip install pytest
 python -m pytest tests/ -v
 ```
 
-77 tests covering rate tracking, sticky sessions, gateway auth, tool translation, key encryption, and health checks.
+130 tests covering rate tracking, sticky sessions, gateway auth, tool translation, key encryption, health checks, SQLite request logging, safe streaming, fallback editing, analytics endpoints, and more.
 
 ## License
 

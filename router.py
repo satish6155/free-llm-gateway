@@ -12,15 +12,91 @@ from typing import TYPE_CHECKING, Any
 from config import AppConfig, ModelFallback
 from providers import ProviderConfig, ProviderError, send_to_provider
 from rate_limiter import RateLimiter
+from rate_tracker import per_key_rate_tracker
+from request_db import request_db
 
 if TYPE_CHECKING:
     from health import HealthChecker
 
 logger = logging.getLogger(__name__)
 
-MAX_RETRIES = 3  # max fallback providers to try per request
+MAX_RETRIES = 10  # max fallback providers to try per request
 RETRY_MAX_ATTEMPTS = int(os.environ.get("RETRY_MAX_ATTEMPTS", "2"))
 RETRY_BACKOFF_BASE = float(os.environ.get("RETRY_BACKOFF_BASE", "1.0"))
+
+
+# ── Dynamic penalty: models that return 429s sink in priority ────────────────
+PENALTY_PER_429 = 3
+MAX_PENALTY = 10
+DECAY_INTERVAL_S = 120  # 2 minutes
+DECAY_AMOUNT = 1
+
+
+class PenaltyTracker:
+    """Track 429 penalties per provider so frequently rate-limited ones sink.
+
+    Models that return 429 get +PENALTY_PER_429 penalty (max MAX_PENALTY).
+    Successful requests reduce penalty by 1. Penalties decay over time
+    (every DECAY_INTERVAL_S seconds, reduce by DECAY_AMOUNT) so models
+    recover after their rate limits reset.
+    """
+
+    def __init__(self) -> None:
+        self._penalties: dict[str, dict[str, int | float]] = {}
+
+    def record_hit(self, provider: str, model: str) -> None:
+        """Record a 429 rate limit hit — increase penalty."""
+        key = f"{provider}:{model}"
+        entry = self._penalties.get(key)
+        now = time.time()
+        if entry:
+            entry["count"] = entry.get("count", 0) + 1
+            entry["last_hit"] = now
+            entry["penalty"] = min(entry.get("penalty", 0) + PENALTY_PER_429, MAX_PENALTY)
+        else:
+            self._penalties[key] = {"count": 1, "last_hit": now, "penalty": PENALTY_PER_429}
+
+    def record_success(self, provider: str, model: str) -> None:
+        """Record a successful request — reduce penalty."""
+        key = f"{provider}:{model}"
+        entry = self._penalties.get(key)
+        if entry:
+            entry["penalty"] = max(0, entry.get("penalty", 0) - 1)
+            if entry["penalty"] == 0:
+                del self._penalties[key]
+
+    def get_penalty(self, provider: str, model: str) -> int:
+        """Get current penalty for a provider+model, with time-based decay."""
+        key = f"{provider}:{model}"
+        entry = self._penalties.get(key)
+        if not entry:
+            return 0
+        # Apply time-based decay
+        now = time.time()
+        elapsed = now - entry.get("last_hit", now)
+        decay_steps = int(elapsed / DECAY_INTERVAL_S)
+        if decay_steps > 0:
+            entry["penalty"] = max(0, entry.get("penalty", 0) - (decay_steps * DECAY_AMOUNT))
+            entry["last_hit"] = now
+            if entry["penalty"] == 0:
+                del self._penalties[key]
+                return 0
+        return int(entry["penalty"])
+
+    def get_all_penalties(self) -> list[dict[str, Any]]:
+        """Get all current penalties (for dashboard / debugging)."""
+        result = []
+        for key, entry in list(self._penalties.items()):
+            parts = key.split(":", 1)
+            penalty = self.get_penalty(parts[0], parts[1] if len(parts) > 1 else "")
+            if penalty > 0:
+                result.append({
+                    "provider": parts[0],
+                    "model": parts[1] if len(parts) > 1 else "",
+                    "count": entry.get("count", 0),
+                    "penalty": penalty,
+                })
+        return sorted(result, key=lambda x: x["penalty"], reverse=True)
 
 
 @dataclass
@@ -66,6 +142,7 @@ class Router:
         self.config = config
         self.rate_limiter = rate_limiter
         self.health_checker = health_checker
+        self.penalty_tracker = PenaltyTracker()
         self._logs: list[RequestLog] = []
         self._max_logs = 100
         self._rr_index: dict[str, int] = {}  # round-robin index per model
@@ -89,10 +166,13 @@ class Router:
         """Filter fallbacks to available providers with round-robin ordering.
 
         Providers are ordered: healthy first (round-robin rotated), then
-        down-but-in-cooldown, skipping rate-limited ones.
+        down-but-in-cooldown, skipping rate-limited ones. Providers with
+        recent 429 penalties sink in priority so working ones are tried first.
         """
         candidates: list[tuple[ProviderConfig, str]] = []
         for fb in fallbacks:
+            if not fb.enabled:
+                continue
             provider = self._get_provider(fb.provider)
             if not provider:
                 continue
@@ -105,10 +185,24 @@ class Router:
             # Skip providers marked as down (unless cooldown expired)
             if self.health_checker and not self.health_checker.is_available(provider.name):
                 continue
+            # Skip if this provider+model combo is on cooldown (recent 429)
+            active_key = provider.api_key or ""
+            if per_key_rate_tracker.is_on_cooldown(provider.name, fb.model, active_key):
+                logger.debug(
+                    "Provider %s/%s is on cooldown, skipping", provider.name, fb.model,
+                )
+                continue
             candidates.append((provider, fb.model))
 
         if len(candidates) > 1:
-            # Apply round-robin: rotate the candidates list
+            # Sort by dynamic penalty: providers with more 429s sink lower
+            def _sort_key(item: tuple[ProviderConfig, str]) -> int:
+                provider, provider_model = item
+                return self.penalty_tracker.get_penalty(provider.name, provider_model)
+
+            candidates.sort(key=_sort_key)
+
+            # Apply round-robin among providers with equal penalty
             idx = self._rr_index.get(model, 0) % len(candidates)
             self._rr_index[model] = idx + 1
             candidates = candidates[idx:] + candidates[:idx]
@@ -119,6 +213,18 @@ class Router:
         self._logs.append(log)
         if len(self._logs) > self._max_logs:
             self._logs = self._logs[-self._max_logs:]
+        # Persist to SQLite
+        tokens = log.tokens or {}
+        request_db.log_request(
+            model=log.model,
+            provider=log.provider,
+            provider_model=log.provider_model,
+            success=log.success,
+            error=log.error,
+            latency_ms=log.latency_ms,
+            tokens=tokens,
+            attempt=log.attempt,
+        )
 
     def get_logs(self, limit: int = 50) -> list[dict[str, Any]]:
         logs = self._logs[-limit:]
@@ -185,6 +291,7 @@ class Router:
                         tokens=tokens,
                         attempt=attempt + 1,
                     ))
+                    self.penalty_tracker.record_success(provider.name, provider_model)
                     return result, provider.name, provider_model
 
                 except ProviderError as e:
@@ -229,6 +336,10 @@ class Router:
                                 "Rotated key for %s to index %d",
                                 provider.name, provider.active_key_index,
                             )
+                        self.penalty_tracker.record_hit(provider.name, provider_model)
+                        # Put this key on cooldown so subsequent requests skip it
+                        active_key = provider.api_key or ""
+                        per_key_rate_tracker.set_cooldown(provider.name, provider_model, active_key)
                         errors.append(f"{provider.name}: rate limited")
                         self._log_request(RequestLog(
                             timestamp=start, model=model,

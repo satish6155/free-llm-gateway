@@ -67,6 +67,12 @@
     if (tab === 'gatewaykeys') {
       loadGatewayKeys();
     }
+    if (tab === 'richanalytics') {
+      loadRichAnalytics();
+    }
+    if (tab === 'fallbacks') {
+      loadFallbacks();
+    }
   }
 
   // ── Mobile ───────────────────────────────────────────────────
@@ -2303,6 +2309,433 @@
 
       tr.appendChild(td);
       tbody.appendChild(tr);
+    });
+  }
+
+  // ── Rich Analytics Tab ──────────────────────────────────────────
+  async function loadRichAnalytics() {
+    var rangeEl = document.getElementById('ra-range');
+    var range = rangeEl ? rangeEl.value : '7d';
+    try {
+      var [summaryResp, modelResp, providerResp, timelineResp, errorsResp] = await Promise.all([
+        fetch('/api/analytics/summary?range=' + range),
+        fetch('/api/analytics/by-model?range=' + range),
+        fetch('/api/analytics/by-provider?range=' + range),
+        fetch('/api/analytics/timeline?range=' + range),
+        fetch('/api/analytics/errors?range=' + range),
+      ]);
+      var summary = summaryResp.ok ? await summaryResp.json() : {};
+      var models = modelResp.ok ? await modelResp.json() : [];
+      var providers = providerResp.ok ? await providerResp.json() : [];
+      var timeline = timelineResp.ok ? await timelineResp.json() : [];
+      var errors = errorsResp.ok ? await errorsResp.json() : {};
+
+      renderRASummary(summary);
+      renderRAByModel(models);
+      renderRAByProvider(providers);
+      renderRATimeline(timeline);
+      renderRAErrors(errors);
+    } catch(e) { console.error('loadRichAnalytics error:', e); }
+
+    // Setup refresh button
+    var refreshBtn = document.getElementById('ra-refresh-btn');
+    if (refreshBtn && !refreshBtn._bound) {
+      refreshBtn._bound = true;
+      refreshBtn.addEventListener('click', loadRichAnalytics);
+    }
+    var rangeSelect = document.getElementById('ra-range');
+    if (rangeSelect && !rangeSelect._bound) {
+      rangeSelect._bound = true;
+      rangeSelect.addEventListener('change', loadRichAnalytics);
+    }
+  }
+
+  function renderRASummary(data) {
+    var el = document.getElementById('ra-summary');
+    if (!el) return;
+    clearEl(el);
+    var items = [
+      { label: 'Total Requests', value: formatNumber(data.total_requests || 0) },
+      { label: 'Success Rate', value: (data.success_rate || 0).toFixed(1) + '%', cls: data.success_rate >= 90 ? 'savings' : '' },
+      { label: 'Total Tokens', value: formatNumber(data.total_tokens || 0) },
+      { label: 'Avg Latency', value: Math.round(data.avg_latency_ms || 0) + 'ms' },
+      { label: 'Est. Cost Saved', value: '$' + (data.estimated_cost_savings || 0).toFixed(2), cls: 'savings' },
+    ];
+    items.forEach(function(item) {
+      var card = document.createElement('div');
+      card.className = 'stat-card';
+      var lbl = document.createElement('div');
+      lbl.className = 'label';
+      lbl.textContent = item.label;
+      card.appendChild(lbl);
+      var val = document.createElement('div');
+      val.className = 'value' + (item.cls ? ' ' + item.cls : '');
+      val.style.fontSize = '20px';
+      val.textContent = item.value;
+      card.appendChild(val);
+      el.appendChild(card);
+    });
+  }
+
+  function renderRAByModel(models) {
+    var el = document.getElementById('ra-by-model');
+    if (!el) return;
+    clearEl(el);
+    if (!models.length) { el.appendChild(makeEmptyEl('No data yet')); return; }
+    var maxReq = models[0].requests || 1;
+    models.slice(0, 10).forEach(function(m) {
+      var row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:6px';
+      var name = document.createElement('span');
+      name.style.cssText = 'width:140px;font-size:12px;color:#8b949e;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+      name.textContent = m.provider + '/' + m.provider_model;
+      name.title = m.provider + '/' + m.provider_model;
+      row.appendChild(name);
+      var bar = document.createElement('div');
+      bar.style.cssText = 'flex:1;height:18px;background:#0d1117;border-radius:3px;overflow:hidden';
+      var fill = document.createElement('div');
+      var rate = m.success_rate || 0;
+      var rateColor = rate >= 90 ? '#3fb950' : rate >= 50 ? '#d29922' : '#f85149';
+      fill.style.cssText = 'height:100%;background:' + rateColor + ';border-radius:3px;width:' + ((m.requests / maxReq) * 100) + '%';
+      bar.appendChild(fill);
+      row.appendChild(bar);
+      var count = document.createElement('span');
+      count.style.cssText = 'font-size:12px;color:#c9d1d9;min-width:60px;text-align:right';
+      count.textContent = formatNumber(m.requests) + ' (' + rate.toFixed(0) + '%)';
+      row.appendChild(count);
+      el.appendChild(row);
+    });
+  }
+
+  function renderRAByProvider(providers) {
+    var el = document.getElementById('ra-by-provider');
+    if (!el) return;
+    clearEl(el);
+    if (!providers.length) { el.appendChild(makeEmptyEl('No data yet')); return; }
+    providers.forEach(function(p) {
+      var row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:6px';
+      var name = document.createElement('span');
+      name.style.cssText = 'width:100px;font-size:12px;color:#8b949e';
+      name.textContent = p.provider;
+      row.appendChild(name);
+      var bar = document.createElement('div');
+      bar.style.cssText = 'flex:1;height:18px;background:#0d1117;border-radius:3px;overflow:hidden';
+      var fill = document.createElement('div');
+      var rate = p.success_rate || 0;
+      var rateColor = rate >= 90 ? '#3fb950' : rate >= 50 ? '#d29922' : '#f85149';
+      fill.style.cssText = 'height:100%;background:' + rateColor + ';border-radius:3px;width:' + rate + '%';
+      bar.appendChild(fill);
+      row.appendChild(bar);
+      var lbl = document.createElement('span');
+      lbl.style.cssText = 'font-size:12px;min-width:80px;text-align:right;color:' + rateColor;
+      lbl.textContent = formatNumber(p.requests) + ' (' + rate.toFixed(0) + '%)';
+      row.appendChild(lbl);
+      el.appendChild(row);
+    });
+  }
+
+  function renderRATimeline(timeline) {
+    var el = document.getElementById('ra-timeline');
+    if (!el) return;
+    clearEl(el);
+    if (!timeline.length) { el.appendChild(makeEmptyEl('No timeline data yet')); return; }
+    var maxR = Math.max.apply(null, timeline.map(function(d) { return d.requests || 0; })) || 1;
+    var chart = document.createElement('div');
+    chart.style.cssText = 'display:flex;align-items:flex-end;gap:4px;height:120px;padding:8px 0';
+    timeline.forEach(function(d) {
+      var pct = ((d.requests || 0) / maxR * 100);
+      var col = document.createElement('div');
+      col.style.cssText = 'flex:1;min-width:8px;display:flex;flex-direction:column;align-items:center;gap:2px';
+      var val = document.createElement('div');
+      val.style.cssText = 'font-size:10px;color:#8b949e';
+      val.textContent = d.requests || 0;
+      col.appendChild(val);
+      var bar = document.createElement('div');
+      bar.style.cssText = 'width:100%;border-radius:3px 3px 0 0;height:' + Math.max(pct, 2) + '%;cursor:pointer';
+      var okPct = d.requests > 0 ? (d.success_count / d.requests * 100) : 100;
+      bar.style.background = 'linear-gradient(to top, #238636 ' + okPct + '%, #f85149 ' + okPct + '%)';
+      bar.title = d.timestamp + ': ' + d.requests + ' requests (' + d.success_count + ' ok, ' + d.failure_count + ' fail)';
+      col.appendChild(bar);
+      var label = document.createElement('div');
+      label.style.cssText = 'font-size:9px;color:#6e7681;max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+      label.textContent = (d.timestamp || '').split('T')[0] || '';
+      col.appendChild(label);
+      chart.appendChild(col);
+    });
+    el.appendChild(chart);
+  }
+
+  function renderRAErrors(data) {
+    var el = document.getElementById('ra-errors');
+    if (!el) return;
+    clearEl(el);
+    var categories = data.by_category || [];
+    var recent = data.recent || [];
+    if (!categories.length && !recent.length) { el.appendChild(makeEmptyEl('No errors recorded')); return; }
+
+    // Category breakdown
+    if (categories.length) {
+      var catTitle = document.createElement('h4');
+      catTitle.style.cssText = 'font-size:13px;color:#c9d1d9;margin-bottom:8px';
+      catTitle.textContent = 'Error Categories';
+      el.appendChild(catTitle);
+
+      var maxCount = categories[0].count || 1;
+      categories.forEach(function(c) {
+        var row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:6px';
+        var name = document.createElement('span');
+        name.style.cssText = 'width:140px;font-size:12px;color:#8b949e';
+        name.textContent = c.category;
+        row.appendChild(name);
+        var bar = document.createElement('div');
+        bar.style.cssText = 'flex:1;height:16px;background:#0d1117;border-radius:3px;overflow:hidden';
+        var fill = document.createElement('div');
+        fill.style.cssText = 'height:100%;background:#f85149;border-radius:3px;width:' + ((c.count / maxCount) * 100) + '%';
+        bar.appendChild(fill);
+        row.appendChild(bar);
+        var count = document.createElement('span');
+        count.style.cssText = 'font-size:12px;color:#f85149;min-width:30px;text-align:right';
+        count.textContent = c.count;
+        row.appendChild(count);
+        el.appendChild(row);
+      });
+    }
+
+    // Recent errors table
+    if (recent.length) {
+      var recTitle = document.createElement('h4');
+      recTitle.style.cssText = 'font-size:13px;color:#c9d1d9;margin:16px 0 8px';
+      recTitle.textContent = 'Recent Errors (last 50)';
+      el.appendChild(recTitle);
+
+      var table = document.createElement('table');
+      var thead = document.createElement('thead');
+      var headRow = document.createElement('tr');
+      ['Provider', 'Model', 'Error', 'Latency'].forEach(function(h) {
+        var th = document.createElement('th');
+        th.textContent = h;
+        headRow.appendChild(th);
+      });
+      thead.appendChild(headRow);
+      table.appendChild(thead);
+
+      var tbody = document.createElement('tbody');
+      recent.slice(0, 20).forEach(function(e) {
+        var tr = document.createElement('tr');
+        appendCell(tr, e.provider || '-');
+        appendCodeCell(tr, e.provider_model || '-');
+        var errTd = document.createElement('td');
+        errTd.style.cssText = 'color:#f85149;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+        errTd.textContent = e.error || '-';
+        errTd.title = e.error || '';
+        tr.appendChild(errTd);
+        appendCell(tr, Math.round(e.latency_ms || 0) + 'ms');
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      el.appendChild(table);
+    }
+  }
+
+  // ── Fallbacks Tab ──────────────────────────────────────────────
+  async function loadFallbacks() {
+    var container = document.getElementById('fb-models-list');
+    if (!container) return;
+    clearEl(container);
+    container.appendChild(makeEmptyEl('Loading fallback chains...'));
+    try {
+      var resp = await fetch('/api/fallbacks');
+      if (!resp.ok) { clearEl(container); container.appendChild(makeEmptyEl('Failed to load fallbacks')); return; }
+      var data = await resp.json();
+      renderFallbacks(data.models || [], container);
+    } catch(e) {
+      clearEl(container);
+      container.appendChild(makeEmptyEl('Error: ' + e.message));
+    }
+
+    var refreshBtn = document.getElementById('fb-refresh-btn');
+    if (refreshBtn && !refreshBtn._bound) {
+      refreshBtn._bound = true;
+      refreshBtn.addEventListener('click', loadFallbacks);
+    }
+  }
+
+  function renderFallbacks(models, container) {
+    clearEl(container);
+    if (!models.length) { container.appendChild(makeEmptyEl('No models with fallback chains configured.')); return; }
+
+    models.forEach(function(model) {
+      var card = document.createElement('div');
+      card.className = 'provider-card';
+      card.style.cssText = 'margin-bottom:16px';
+
+      // Header
+      var header = document.createElement('div');
+      header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:12px';
+      var h3 = document.createElement('h3');
+      h3.style.cssText = 'margin:0;font-size:15px;color:#e6edf3';
+      h3.textContent = model.name;
+      header.appendChild(h3);
+
+      // Sort preset buttons
+      var sortWrap = document.createElement('div');
+      sortWrap.style.cssText = 'display:flex;gap:6px';
+      ['priority', 'penalty', 'health'].forEach(function(preset) {
+        var btn = document.createElement('button');
+        btn.className = 'btn btn-sm';
+        btn.style.cssText = 'background:#21262d;color:#c9d1d9;border:1px solid #30363d';
+        btn.textContent = 'Sort: ' + preset;
+        btn.addEventListener('click', async function() {
+          btn.disabled = true;
+          btn.textContent = 'Sorting...';
+          try {
+            var sortResp = await fetch('/api/fallbacks/' + encodeURIComponent(model.name) + '/sort/' + preset, { method: 'POST' });
+            if (sortResp.ok) loadFallbacks();
+            else { var err = await sortResp.json(); alert(err.detail || 'Sort failed'); }
+          } catch(e) { alert('Error: ' + e.message); }
+          btn.disabled = false;
+          btn.textContent = 'Sort: ' + preset;
+        });
+        sortWrap.appendChild(btn);
+      });
+      header.appendChild(sortWrap);
+      card.appendChild(header);
+
+      // Fallback entries
+      var fallbacks = model.fallbacks || [];
+      if (!fallbacks.length) {
+        var empty = document.createElement('div');
+        empty.style.cssText = 'color:#6e7681;font-size:13px';
+        empty.textContent = 'No fallbacks configured';
+        card.appendChild(empty);
+      } else {
+        var table = document.createElement('table');
+        table.style.cssText = 'width:100%';
+        var thead = document.createElement('thead');
+        var headRow = document.createElement('tr');
+        ['Provider', 'Model', 'Penalty', 'Status', 'Actions'].forEach(function(h) {
+          var th = document.createElement('th');
+          th.textContent = h;
+          th.style.cssText = 'font-size:12px;padding:6px 8px';
+          headRow.appendChild(th);
+        });
+        thead.appendChild(headRow);
+        table.appendChild(thead);
+
+        var tbody = document.createElement('tbody');
+        fallbacks.forEach(function(fb, idx) {
+          var tr = document.createElement('tr');
+
+          appendCell(tr, fb.provider);
+          appendCodeCell(tr, fb.model);
+
+          // Penalty
+          var penTd = document.createElement('td');
+          var penalty = fb.penalty || 0;
+          penTd.style.color = penalty > 5 ? '#f85149' : penalty > 0 ? '#d29922' : '#3fb950';
+          penTd.textContent = penalty;
+          tr.appendChild(penTd);
+
+          // Status
+          var statusTd = document.createElement('td');
+          statusTd.appendChild(makeTag(fb.enabled !== false ? 'Enabled' : 'Disabled', fb.enabled !== false ? 'tag-green' : 'tag-red'));
+          tr.appendChild(statusTd);
+
+          // Actions
+          var actTd = document.createElement('td');
+          actTd.style.cssText = 'display:flex;gap:4px';
+
+          // Toggle enable/disable
+          var toggleBtn = document.createElement('button');
+          toggleBtn.className = 'btn btn-sm';
+          toggleBtn.textContent = fb.enabled !== false ? 'Disable' : 'Enable';
+          toggleBtn.style.background = fb.enabled !== false ? '#d29922' : '#238636';
+          toggleBtn.style.color = '#fff';
+          toggleBtn.addEventListener('click', async function() {
+            var updated = fallbacks.map(function(f, i) {
+              var entry = { provider: f.provider, model: f.model };
+              if (i === idx) entry.enabled = f.enabled === false ? true : false;
+              else if (f.enabled === false) entry.enabled = false;
+              return entry;
+            });
+            try {
+              var putResp = await fetch('/api/fallbacks/' + encodeURIComponent(model.name), {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updated)
+              });
+              if (putResp.ok) loadFallbacks();
+              else { var err = await putResp.json(); alert(err.detail || 'Update failed'); }
+            } catch(e) { alert('Error: ' + e.message); }
+          });
+          actTd.appendChild(toggleBtn);
+
+          // Move up
+          if (idx > 0) {
+            var upBtn = document.createElement('button');
+            upBtn.className = 'btn btn-sm';
+            upBtn.style.cssText = 'background:#21262d;color:#c9d1d9;border:1px solid #30363d';
+            upBtn.textContent = '↑';
+            upBtn.title = 'Move up';
+            upBtn.addEventListener('click', async function() {
+              var reordered = fallbacks.map(function(f) {
+                var entry = { provider: f.provider, model: f.model };
+                if (f.enabled === false) entry.enabled = false;
+                return entry;
+              });
+              var tmp = reordered[idx];
+              reordered[idx] = reordered[idx - 1];
+              reordered[idx - 1] = tmp;
+              try {
+                var putResp = await fetch('/api/fallbacks/' + encodeURIComponent(model.name), {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(reordered)
+                });
+                if (putResp.ok) loadFallbacks();
+              } catch(e) { alert('Error: ' + e.message); }
+            });
+            actTd.appendChild(upBtn);
+          }
+
+          // Move down
+          if (idx < fallbacks.length - 1) {
+            var downBtn = document.createElement('button');
+            downBtn.className = 'btn btn-sm';
+            downBtn.style.cssText = 'background:#21262d;color:#c9d1d9;border:1px solid #30363d';
+            downBtn.textContent = '↓';
+            downBtn.title = 'Move down';
+            downBtn.addEventListener('click', async function() {
+              var reordered = fallbacks.map(function(f) {
+                var entry = { provider: f.provider, model: f.model };
+                if (f.enabled === false) entry.enabled = false;
+                return entry;
+              });
+              var tmp = reordered[idx];
+              reordered[idx] = reordered[idx + 1];
+              reordered[idx + 1] = tmp;
+              try {
+                var putResp = await fetch('/api/fallbacks/' + encodeURIComponent(model.name), {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(reordered)
+                });
+                if (putResp.ok) loadFallbacks();
+              } catch(e) { alert('Error: ' + e.message); }
+            });
+            actTd.appendChild(downBtn);
+          }
+
+          tr.appendChild(actTd);
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        card.appendChild(table);
+      }
+
+      container.appendChild(card);
     });
   }
 

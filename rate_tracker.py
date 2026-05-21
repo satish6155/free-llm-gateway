@@ -78,9 +78,13 @@ class PerKeyRateTracker:
     MINUTE = 60
     DAY = 86400
 
+    # Default cooldown duration when a key gets 429'd (seconds)
+    DEFAULT_COOLDOWN_S = 30.0
+
     def __init__(self) -> None:
         self._buckets: dict[str, RateBucket] = {}
         self._limits: dict[str, RateLimits] = {}
+        self._cooldowns: dict[str, float] = {}  # key -> cooldown expires at (epoch)
         self._lock = Lock()
 
     @staticmethod
@@ -151,6 +155,36 @@ class PerKeyRateTracker:
                 return True, f"TPD limit reached ({tpd_used}/{limits.tpd})"
 
         return False, ""
+
+    def set_cooldown(
+        self, provider: str, model: str, api_key: str,
+        duration_s: float | None = None,
+    ) -> None:
+        """Put a (provider, model, key) on cooldown after a 429.
+
+        While on cooldown, `is_on_cooldown()` returns True and the router
+        will skip this key until the cooldown expires.
+        """
+        k = self._key(provider, model, api_key)
+        if duration_s is None:
+            duration_s = self.DEFAULT_COOLDOWN_S
+        with self._lock:
+            self._cooldowns[k] = time.time() + duration_s
+
+    def is_on_cooldown(
+        self, provider: str, model: str, api_key: str,
+    ) -> bool:
+        """Check if a (provider, model, key) is currently on cooldown."""
+        k = self._key(provider, model, api_key)
+        with self._lock:
+            expires = self._cooldowns.get(k)
+            if expires is None:
+                return False
+            if time.time() < expires:
+                return True
+            # Cooldown expired, clean up
+            del self._cooldowns[k]
+            return False
 
     def get_usage(
         self, provider: str, model: str, api_key: str,
