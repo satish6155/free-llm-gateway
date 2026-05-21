@@ -186,6 +186,41 @@ class PerKeyRateTracker:
             del self._cooldowns[k]
             return False
 
+    def would_exceed_token_limit(
+        self, provider: str, model: str, api_key: str,
+        estimated_tokens: int,
+    ) -> tuple[bool, str]:
+        """Check if adding estimated_tokens would exceed TPM or TPD limits.
+
+        Pre-checks token limits before sending a request to avoid routing
+        to a provider that's near its token quota. Returns (would_exceed, reason).
+        """
+        k = self._key(provider, model, api_key)
+        limits = self._limits.get(k)
+        if not limits:
+            return False, ""
+
+        bucket = self._buckets.get(k)
+        if not bucket:
+            return False, ""
+
+        now = time.time()
+        bucket.prune(self.DAY, now)
+
+        # Check TPM
+        if limits.tpm > 0:
+            tpm_used = bucket.token_count(self.MINUTE, now)
+            if tpm_used + estimated_tokens > limits.tpm:
+                return True, f"TPM limit would be exceeded ({tpm_used}+{estimated_tokens}/{limits.tpm})"
+
+        # Check TPD
+        if limits.tpd > 0:
+            tpd_used = bucket.token_count(self.DAY, now)
+            if tpd_used + estimated_tokens > limits.tpd:
+                return True, f"TPD limit would be exceeded ({tpd_used}+{estimated_tokens}/{limits.tpd})"
+
+        return False, ""
+
     def get_usage(
         self, provider: str, model: str, api_key: str,
     ) -> dict[str, Any]:

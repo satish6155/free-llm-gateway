@@ -321,9 +321,42 @@ class RequestDB:
                 (since,),
             ).fetchall()
 
+            # Detailed: provider × category cross-product
+            detailed = self._conn.execute(
+                """
+                SELECT
+                    provider,
+                    CASE
+                        WHEN error LIKE '%429%' OR error LIKE '%rate limit%' OR error LIKE '%rate%'
+                            THEN 'Rate Limited (429)'
+                        WHEN error LIKE '%timeout%' OR error LIKE '%timed out%'
+                            THEN 'Timeout'
+                        WHEN error LIKE '%401%' OR error LIKE '%unauthorized%'
+                            THEN 'Auth Error (401)'
+                        WHEN error LIKE '%403%' OR error LIKE '%forbidden%'
+                            THEN 'Forbidden (403)'
+                        WHEN error LIKE '%500%' OR error LIKE '%internal%'
+                            THEN 'Server Error (500)'
+                        WHEN error LIKE '%502%' OR error LIKE '%503%' OR error LIKE '%unavailable%'
+                            THEN 'Server Error (502/503)'
+                        ELSE 'Other'
+                    END as category,
+                    COUNT(*) as count
+                FROM requests
+                WHERE success = 0 AND timestamp >= ?
+                GROUP BY provider, category
+                ORDER BY count DESC
+                """,
+                (since,),
+            ).fetchall()
+
         return {
             "by_category": [{"category": r[0], "count": r[1]} for r in by_category],
             "by_provider": [{"provider": r[0], "count": r[1]} for r in by_provider],
+            "detailed": [
+                {"provider": r[0], "category": r[1], "count": r[2]}
+                for r in detailed
+            ],
             "recent": [
                 {
                     "id": r[0],
@@ -345,6 +378,41 @@ class RequestDB:
         with self._lock:
             row = self._conn.execute("SELECT COUNT(*) FROM requests").fetchone()
         return row[0] if row else 0
+
+    def get_model_token_usage(self, days: int = 30) -> dict[str, dict[str, Any]]:
+        """Get token usage grouped by model name for the last N days.
+
+        Returns {model_name: {total_tokens, prompt_tokens, completion_tokens, requests}}.
+        """
+        if not self._conn:
+            return {}
+        since = time.time() - (days * 86400)
+        with self._lock:
+            rows = self._conn.execute(
+                """
+                SELECT
+                    model,
+                    COUNT(*) as requests,
+                    SUM(prompt_tokens) as total_input,
+                    SUM(completion_tokens) as total_output,
+                    SUM(total_tokens) as total_tokens
+                FROM requests
+                WHERE timestamp >= ? AND success = 1
+                GROUP BY model
+                ORDER BY total_tokens DESC
+                """,
+                (since,),
+            ).fetchall()
+
+        return {
+            r[0]: {
+                "requests": r[1],
+                "prompt_tokens": r[2] or 0,
+                "completion_tokens": r[3] or 0,
+                "total_tokens": r[4] or 0,
+            }
+            for r in rows
+        }
 
 
 # Global singleton

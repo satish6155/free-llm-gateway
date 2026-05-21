@@ -14,6 +14,7 @@ from providers import ProviderConfig, ProviderError, send_to_provider
 from rate_limiter import RateLimiter
 from rate_tracker import per_key_rate_tracker
 from request_db import request_db
+from token_estimator import estimate_request_tokens
 
 if TYPE_CHECKING:
     from health import HealthChecker
@@ -161,14 +162,21 @@ class Router:
         return p
 
     def _select_provider(
-        self, model: str, fallbacks: list[ModelFallback]
+        self, model: str, fallbacks: list[ModelFallback],
+        payload: dict[str, Any] | None = None,
     ) -> list[tuple[ProviderConfig, str]]:
         """Filter fallbacks to available providers with round-robin ordering.
 
         Providers are ordered: healthy first (round-robin rotated), then
         down-but-in-cooldown, skipping rate-limited ones. Providers with
         recent 429 penalties sink in priority so working ones are tried first.
+
+        If payload is provided, estimates token count and pre-checks TPM/TPD
+        limits before adding a provider as a candidate.
         """
+        # Estimate tokens from the request payload for TPM/TPD pre-checks
+        estimated_tokens = estimate_request_tokens(payload) if payload else 0
+
         candidates: list[tuple[ProviderConfig, str]] = []
         for fb in fallbacks:
             if not fb.enabled:
@@ -185,8 +193,34 @@ class Router:
             # Skip providers marked as down (unless cooldown expired)
             if self.health_checker and not self.health_checker.is_available(provider.name):
                 continue
-            # Skip if this provider+model combo is on cooldown (recent 429)
             active_key = provider.api_key or ""
+            # Register per-model rate limits (lazy init on first route)
+            if fb.rpm_limit or fb.rpd_limit or fb.tpm_limit or fb.tpd_limit:
+                per_key_rate_tracker.set_limits(
+                    provider.name, fb.model, active_key,
+                    rpm=fb.rpm_limit, rpd=fb.rpd_limit,
+                    tpm=fb.tpm_limit, tpd=fb.tpd_limit,
+                )
+            # Check per-key rate limits (RPM/RPD/TPM/TPD)
+            limited, reason = per_key_rate_tracker.is_limited(provider.name, fb.model, active_key)
+            if limited:
+                logger.debug(
+                    "Provider %s/%s is per-model rate limited: %s",
+                    provider.name, fb.model, reason,
+                )
+                continue
+            # Pre-check TPM/TPD with estimated tokens for this request
+            if estimated_tokens > 0:
+                would_exceed, est_reason = per_key_rate_tracker.would_exceed_token_limit(
+                    provider.name, fb.model, active_key, estimated_tokens,
+                )
+                if would_exceed:
+                    logger.debug(
+                        "Provider %s/%s would exceed token limit with %d estimated tokens: %s",
+                        provider.name, fb.model, estimated_tokens, est_reason,
+                    )
+                    continue
+            # Skip if this provider+model combo is on cooldown (recent 429)
             if per_key_rate_tracker.is_on_cooldown(provider.name, fb.model, active_key):
                 logger.debug(
                     "Provider %s/%s is on cooldown, skipping", provider.name, fb.model,
@@ -259,7 +293,7 @@ class Router:
         if not fallbacks:
             raise ValueError(f"Unknown model: {model}")
 
-        candidates = self._select_provider(model, fallbacks)
+        candidates = self._select_provider(model, fallbacks, payload)
         if not candidates:
             raise ValueError(
                 f"No available providers for model '{model}'. "

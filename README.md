@@ -20,6 +20,7 @@ A unified OpenAI-compatible API server that aggregates **24+ free LLM providers*
 - **AES-256-GCM encrypted key storage** — API keys encrypted at rest with authenticated encryption
 - **Unified gateway API keys** — `fgk-...` prefixed keys with per-key model/provider restrictions and admin roles
 - **Per-key rate tracking** — RPM/RPD/TPM/TPD monitoring with rolling time windows and provider free-tier limits
+- **Token estimation** — pre-flight TPM/TPD checks before routing to avoid hitting limits
 - **Key health validation** — one-click test all API keys
 - **Timing-safe key comparison** — constant-time auth to prevent timing attacks
 
@@ -32,6 +33,7 @@ A unified OpenAI-compatible API server that aggregates **24+ free LLM providers*
 - **Retry with backoff** — exponential backoff on 500/502/503 errors, Retry-After support on 429s
 - **Runtime fallback editing** — reorder, enable/disable fallbacks via API without restart
 - **Sort presets** — sort fallbacks by priority, penalty score, or health status
+- **Model size labels** — automatic `small`/`medium`/`large`/`xl` tagging from model names
 
 ### Analytics & Persistence
 - **SQLite request log** — every routed request persisted to disk, survives restarts
@@ -193,6 +195,7 @@ Point any tool that supports custom OpenAI base URLs to `http://localhost:8080/v
 
 | Endpoint | Method | Description |
 |---|---|---|
+| `/api/ping` | GET | Lightweight liveness probe (no auth required) |
 | `/api/status` | GET | JSON status |
 | `/api/analytics` | GET | Usage analytics + savings |
 | `/api/keys/validate-all` | POST | Validate all API keys |
@@ -277,8 +280,10 @@ docker-compose up -d
 Any AI Tool → Gateway (localhost:8080)
                ├── Auth check (timing-safe, MASTER_KEY or fgk- gateway keys)
                ├── Per-key rate limiting (RPM/RPD/TPM/TPD)
+               ├── Token estimation with TPM/TPD pre-checks
                ├── AES-256-GCM encrypted key storage
                ├── Smart routing with 60+ aliases
+               ├── Model size labels (auto-inferred from names)
                ├── Round-robin load balancing
                ├── Dynamic penalty routing (429s sink priority)
                ├── Per-key cooldown on rate limits
@@ -286,6 +291,7 @@ Any AI Tool → Gateway (localhost:8080)
                ├── Sticky sessions (30-min affinity)
                ├── Tool calling translation (OpenAI ↔ Gemini)
                ├── Streaming with mid-stream error handling
+               ├── Liveness probe (/api/ping health checks)
                ├── Rate limit tracking per provider
                ├── Auto-fallback on failure
                ├── Runtime fallback chain editing (API)

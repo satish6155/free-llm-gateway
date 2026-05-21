@@ -29,12 +29,20 @@ class ProviderConfig:
 
     def __post_init__(self) -> None:
         self._key_index: int = 0
+        self.disabled_keys: list[str] = []  # auto-disabled by health checker
 
     @property
     def api_key(self) -> str:
-        """Current active API key (round-robin)."""
+        """Current active API key (round-robin), skipping disabled keys."""
         if not self.api_keys:
             return ""
+        # Find a non-disabled key starting from current index
+        for _ in range(len(self.api_keys)):
+            key = self.api_keys[self._key_index % len(self.api_keys)]
+            if key not in self.disabled_keys:
+                return key
+            self._key_index = (self._key_index + 1) % len(self.api_keys)
+        # All keys disabled — return current anyway as fallback
         return self.api_keys[self._key_index % len(self.api_keys)]
 
     @api_key.setter
@@ -55,9 +63,16 @@ class ProviderConfig:
         return len(self.api_keys)
 
     def rotate_key(self) -> str:
-        """Advance to next key (round-robin) and return it."""
+        """Advance to next non-disabled key (round-robin)."""
         if self.api_keys:
-            self._key_index = (self._key_index + 1) % len(self.api_keys)
+            start = self._key_index
+            for _ in range(len(self.api_keys)):
+                self._key_index = (self._key_index + 1) % len(self.api_keys)
+                key = self.api_keys[self._key_index]
+                if key not in self.disabled_keys:
+                    return key
+            # All disabled — just advance and return
+            self._key_index = (start + 1) % len(self.api_keys)
         return self.api_key
 
 
@@ -66,6 +81,10 @@ class ModelFallback:
     provider: str
     model: str
     enabled: bool = True
+    rpm_limit: int = 0  # 0 = use provider default
+    rpd_limit: int = 0
+    tpm_limit: int = 0
+    tpd_limit: int = 0
 
 
 @dataclass
@@ -80,6 +99,12 @@ class ModelConfig:
     unified_name: str
     fallbacks: list[ModelFallback] = field(default_factory=list)
     capabilities: ModelCapabilities = field(default_factory=ModelCapabilities)
+    monthly_token_budget: int = 0  # 0 = unlimited
+    intelligence_rank: int = 0  # 0 = unknown, higher = smarter
+    speed_rank: int = 0  # 0 = unknown, higher = faster
+    context_window: int = 0  # 0 = unknown, max context tokens (e.g. 128000)
+    size_label: str = ""  # e.g. "70B", "405B", "8B", empty = unknown
+    meta: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -177,6 +202,83 @@ def _load_providers() -> dict[str, ProviderConfig]:
     return providers
 
 
+def _parse_context_window(ctx: str) -> int:
+    """Parse a context string like '256K', '1M', '128K (8K on free)' into tokens.
+
+    Returns 0 if unparseable.
+    """
+    if not ctx:
+        return 0
+    import re
+    # Strip parenthetical notes, take the first number
+    cleaned = re.sub(r"\(.*?\)", "", str(ctx)).strip()
+    m = re.match(r"~?([\d,]+\.?\d*)\s*([KM]?)", cleaned, re.IGNORECASE)
+    if not m:
+        return 0
+    num = float(m.group(1).replace(",", ""))
+    unit = m.group(2).upper()
+    if unit == "K":
+        return int(num * 1_000)
+    if unit == "M":
+        return int(num * 1_000_000)
+    return int(num)
+
+
+def _parse_rate_limit(rate_str: str) -> dict[str, int]:
+    """Parse a rate limit string like '30 RPM, 14,400 RPD' into structured limits.
+
+    Handles: RPM, RPD, TPM, TPD, RPS (×60), req/hr (÷60), K/M suffixes,
+    tilde prefix, commas in numbers, parenthetical notes.
+    Returns dict with rpm/rpd/tpm/tpd keys (0 for unparsed).
+    """
+    import re
+
+    result: dict[str, int] = {"rpm": 0, "rpd": 0, "tpm": 0, "tpd": 0}
+    if not rate_str:
+        return result
+
+    # Remove parenthetical notes and semicolon sections
+    cleaned = rate_str.split("(")[0].split(";")[0].strip()
+    # Remove tilde prefixes
+    cleaned = cleaned.replace("~", "")
+
+    # Match patterns like "30 RPM", "14,400 RPD", "500K TPM", "1M TPD", "1 RPS", "200 req/hr"
+    pattern = re.compile(
+        r"([\d,]+\.?\d*)\s*([KM]?)\s*(RPM|RPD|TPM|TPD|RPS|REQ/HR|REQ/H)",
+        re.IGNORECASE,
+    )
+    for m in pattern.finditer(cleaned):
+        num_str = m.group(1).replace(",", "")
+        suffix = m.group(2).upper()
+        unit = m.group(3).upper()
+
+        multiplier = 1
+        if suffix == "K":
+            multiplier = 1_000
+        elif suffix == "M":
+            multiplier = 1_000_000
+
+        try:
+            value = int(float(num_str) * multiplier)
+        except (ValueError, TypeError):
+            continue
+
+        if unit == "RPS":
+            result["rpm"] = max(result["rpm"], value * 60)
+        elif unit == "RPM":
+            result["rpm"] = max(result["rpm"], value)
+        elif unit == "RPD":
+            result["rpd"] = max(result["rpd"], value)
+        elif unit == "TPM":
+            result["tpm"] = max(result["tpm"], value)
+        elif unit == "TPD":
+            result["tpd"] = max(result["tpd"], value)
+        elif unit in ("REQ/HR", "REQ/H"):
+            result["rpm"] = max(result["rpm"], max(1, value // 60))
+
+    return result
+
+
 def _load_models() -> dict[str, ModelConfig]:
     models_file = BASE_DIR / "models.yaml"
     if not models_file.exists():
@@ -194,8 +296,9 @@ def _load_models() -> dict[str, ModelConfig]:
                 for fb in model_data
             ]
             capabilities = ModelCapabilities()
+            meta = {}
         elif isinstance(model_data, dict):
-            # New format: {capabilities: {...}, fallbacks: [...]}
+            # New format: {capabilities: {...}, fallbacks: [...], _meta: {...}}
             fb_list = [
                 ModelFallback(provider=fb["provider"], model=fb["model"])
                 for fb in model_data.get("fallbacks", [])
@@ -206,12 +309,200 @@ def _load_models() -> dict[str, ModelConfig]:
                 supports_vision=caps_data.get("supports_vision", False),
                 supports_streaming=caps_data.get("supports_streaming", True),
             )
+            meta = model_data.get("_meta", {})
+            # Parse rate limits from _meta into each fallback
+            rate_limits = _parse_rate_limit(meta.get("rate_limit", ""))
+            if any(rate_limits.values()):
+                fb_list = [
+                    ModelFallback(
+                        provider=fb.provider,
+                        model=fb.model,
+                        rpm_limit=rate_limits["rpm"] or fb.rpm_limit,
+                        rpd_limit=rate_limits["rpd"] or fb.rpd_limit,
+                        tpm_limit=rate_limits["tpm"] or fb.tpm_limit,
+                        tpd_limit=rate_limits["tpd"] or fb.tpd_limit,
+                    )
+                    for fb in fb_list
+                ]
         else:
             continue
+        # Get explicit ranks from YAML, or infer from model name
+        explicit_intel = int(model_data.get("intelligence_rank", 0)) if isinstance(model_data, dict) else 0
+        explicit_speed = int(model_data.get("speed_rank", 0)) if isinstance(model_data, dict) else 0
+        inferred_intel, inferred_speed = _infer_ranks(model_name)
+        # Parse context window from _meta.context (e.g. "256K", "1M", "128K (8K on free)")
+        context_window = _parse_context_window(meta.get("context", "")) if isinstance(meta, dict) else 0
+        # Size label: explicit in YAML or inferred from model name
+        explicit_size = str(model_data.get("size_label", "")) if isinstance(model_data, dict) else ""
+        size_label = explicit_size or _infer_size_label(model_name)
         models[model_name] = ModelConfig(
-            unified_name=model_name, fallbacks=fb_list, capabilities=capabilities,
+            unified_name=model_name,
+            fallbacks=fb_list,
+            capabilities=capabilities,
+            monthly_token_budget=int(model_data.get("monthly_token_budget", 0)) if isinstance(model_data, dict) else 0,
+            intelligence_rank=explicit_intel or inferred_intel,
+            speed_rank=explicit_speed or inferred_speed,
+            context_window=context_window,
+            size_label=size_label,
+            meta=meta if isinstance(meta, dict) else {},
         )
     return models
+
+
+def _infer_size_label(model_name: str) -> str:
+    """Infer parameter count label from model name.
+
+    Returns a string like "70B", "405B", "8B", or "" if unknown.
+    """
+    import re
+    name = model_name.lower()
+
+    # Direct size patterns in name (e.g. "llama-3.3-70b", "gemma-3-27b")
+    m = re.search(r"(\d+(?:\.\d+)?)\s*[x×]?(\d+[bmk])", name)
+    if m:
+        return m.group(2).upper()
+
+    # Simple patterns like "70b", "405b", "8b"
+    m = re.search(r"(?<!\w)(\d+(?:\.\d+)?)([bmk])(?!\w)", name)
+    if m:
+        return f"{m.group(1)}{m.group(2).upper()}"
+
+    # Known model families with well-known sizes
+    size_map = {
+        # Llama
+        "llama-3.3-70b": "70B", "llama-3.1-8b": "8B", "llama-3.1-405b": "405B",
+        "llama-4-maverick": "400B", "llama-4-scout": "109B",
+        # Qwen
+        "qwen3-32b": "32B", "qwen3-8b": "8B", "qwen2.5-72b": "72B",
+        "qwen2.5-7b": "7B", "qwen2.5-coder": "32B", "qwen3-coder": "480B",
+        "qwen3.5-35b": "35B", "qwen3.5-27b": "27B", "qwen3-235b": "235B",
+        "qwen3-next-80b": "80B",
+        # Gemma
+        "gemma-4-31b": "31B", "gemma-4-26b": "26B", "gemma-3-27b": "27B",
+        "gemma-3-12b": "12B", "gemma-3-4b": "4B", "gemma-3-1b": "1B",
+        # Mistral
+        "mistral-large": "123B", "mistral-small": "22B", "mistral-medium": "75B",
+        "mistral-7b": "7B", "mixtral-8x7b": "47B", "codestral": "22B",
+        "open-mistral-nemo": "12B",
+        # DeepSeek
+        "deepseek-r1": "671B", "deepseek-v3": "685B", "deepseek-chat-v3": "685B",
+        # Nemotron
+        "nemotron-super": "253B", "nemotron-ultra": "253B", "nemotron-nano": "8B",
+        # GPT
+        "gpt-4.1": "1.8T", "gpt-4o": "200B", "o3-mini": "100B", "o4-mini": "100B",
+        # Gemini
+        "gemini-2.5-flash": "540B", "gemini-2.0-flash": "540B",
+        # Others
+        "hermes-3-405b": "405B", "command-a": "111B", "command-r-plus": "104B",
+        "command-r": "35B", "command-r7b": "7B",
+        "minimax-m2": "456B", "pixtral-large": "123B",
+        "phi-3.5": "3.8B", "glm-4": "9B", "glm-4.5": "9B",
+        "dolphin-mistral-24b": "24B", "gpt-oss-120b": "120B",
+        "gpt-oss-20b": "20B",
+    }
+    for key, label in size_map.items():
+        if key in name:
+            return label
+
+    return ""
+
+
+def _infer_ranks(model_name: str) -> tuple[int, int]:
+    """Infer intelligence and speed ranks from model name heuristics.
+
+    Returns (intelligence_rank, speed_rank). Both 0-10 scale.
+    Higher intelligence = smarter. Higher speed = faster inference.
+    """
+    name = model_name.lower()
+
+    # ── Intelligence ranks ──
+    # Tier 1: Top reasoning models (9-10)
+    if any(k in name for k in ("o3-mini", "o4-mini", "deepseek-r1-0528", "qwq", "qwen3-coder")):
+        return 10, 5
+    if any(k in name for k in ("gpt-4.1-", "gpt-4o", "deepseek-r1", "qwen3.5-35b")):
+        return 9, 5
+    if any(k in name for k in ("gpt-4.1:", "deepseek-v3", "kimi-k2", "qwen3-next")):
+        return 9, 4
+
+    # Tier 2: Strong large models (7-8)
+    if any(k in name for k in ("nemotron-super", "nemotron-ultra", "hermes-3-405b")):
+        return 8, 3
+    if any(k in name for k in ("llama-3.3-70b", "llama-4-maverick", "qwen3-32b", "qwen-3-235b")):
+        return 7, 4
+    if any(k in name for k in ("gemma-4-31b", "mistral-large", "command-a-", "qwen2.5-72b")):
+        return 7, 4
+    if any(k in name for k in ("llama-4-scout", "minimax-m2", "pixtral-large")):
+        return 7, 5
+
+    # Tier 3: Mid-range models (5-6)
+    if any(k in name for k in ("gemma-4-26b", "gemma-3-27b", "mistral-medium", "command-r-plus")):
+        return 6, 6
+    if any(k in name for k in ("mistral-small-3", "qwen2.5-coder", "codestral")):
+        return 6, 7
+    if any(k in name for k in ("dolphin-mistral-24b", "gpt-oss-120b", "glm-4.5")):
+        return 5, 5
+
+    # Tier 4: Small/fast models (3-4)
+    if any(k in name for k in ("llama-3.1-8b", "gemma-3-12b", "command-r-", "open-mistral-nemo")):
+        return 4, 8
+    if any(k in name for k in ("mistral-7b", "phi-3.5", "glm-4", "qwen2.5-7b", "qwen3-8b")):
+        return 4, 8
+    if any(k in name for k in ("nemotron-nano", "gpt-oss-20b")):
+        return 4, 8
+
+    # Tier 5: Tiny models (2)
+    if any(k in name for k in ("gemma-3-4b", "command-r7b", "gemma-3-1b")):
+        return 2, 9
+
+    # ── Catch remaining by model family ──
+    if "gemini-2.5-flash" in name:
+        return 8, 7
+    if "gpt-4.1" in name:
+        return 9, 5
+    if "mistral-small" in name:
+        return 5, 8
+    if "llama3.1" in name or "llama-3.1" in name:
+        return 4, 8
+    if "glm-4" in name or "glm-4." in name:
+        return 5, 7
+    if "ling-" in name:
+        return 4, 8
+    # Cloudflare worker models (fast inference)
+    if name.startswith("@cf/"):
+        return 5, 8
+
+    # Named provider/model patterns
+    if "mixtral-8x7b" in name:
+        return 6, 7
+    if "nemotron-3-super-120b" in name:
+        return 8, 4
+    if "nemotron-3-nano" in name:
+        return 3, 9
+    if "qwen3.5-27b" in name:
+        return 7, 6
+    if "qwen3.6-plus" in name:
+        return 7, 6
+    if "deepseek-chat-v3" in name:
+        return 8, 5
+    if "deepseek-ocr" in name:
+        return 6, 5
+    if "devstral" in name:
+        return 5, 8
+    if "grok-code-fast" in name:
+        return 6, 9
+    if "dola-seed" in name or "trinity-large" in name:
+        return 7, 5
+
+    # ── Speed overrides for known fast providers ──
+    # Cerebras = extremely fast
+    if "cerebras" in name:
+        return 4, 10
+    # Groq = very fast
+    if "groq" in name:
+        return 4, 9
+
+    # Default: unknown
+    return 0, 0
 
 
 def load_config() -> AppConfig:

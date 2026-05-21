@@ -348,6 +348,14 @@
       catTag.style.cssText = 'display:inline-block;margin-left:6px;padding:1px 6px;border-radius:8px;font-size:10px;font-weight:600;color:' + (catColors[cat] || '#8b949e');
       catTag.textContent = cat;
       td1.appendChild(catTag);
+      // Size label tag
+      if (m.size_label) {
+        var sizeColors = { 'micro': '#6e7681', 'small': '#58a6ff', 'medium': '#3fb950', 'large': '#d29922', 'xl': '#f0883e', 'xxl': '#f85149' };
+        var sizeTag = document.createElement('span');
+        sizeTag.style.cssText = 'display:inline-block;margin-left:4px;padding:1px 6px;border-radius:8px;font-size:10px;font-weight:600;background:' + (sizeColors[m.size_label] || '#6e7681') + '22;color:' + (sizeColors[m.size_label] || '#6e7681');
+        sizeTag.textContent = m.size_label.toUpperCase();
+        td1.appendChild(sizeTag);
+      }
       tr.appendChild(td1);
 
       // Active provider
@@ -2578,6 +2586,15 @@
       h3.style.cssText = 'margin:0;font-size:15px;color:#e6edf3';
       h3.textContent = model.name;
       header.appendChild(h3);
+
+      // Size label badge
+      if (model.size_label) {
+        var sizeColors = { 'micro': '#6e7681', 'small': '#58a6ff', 'medium': '#3fb950', 'large': '#d29922', 'xl': '#f0883e', 'xxl': '#f85149' };
+        var sizeBadge = document.createElement('span');
+        sizeBadge.style.cssText = 'margin-left:8px;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:600;background:' + (sizeColors[model.size_label] || '#6e7681') + '22;color:' + (sizeColors[model.size_label] || '#6e7681');
+        sizeBadge.textContent = model.size_label.toUpperCase();
+        header.appendChild(sizeBadge);
+      }
 
       // Sort preset buttons
       var sortWrap = document.createElement('div');
