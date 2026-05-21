@@ -185,8 +185,23 @@ class Router:
             # Skip providers marked as down (unless cooldown expired)
             if self.health_checker and not self.health_checker.is_available(provider.name):
                 continue
-            # Skip if this provider+model combo is on cooldown (recent 429)
             active_key = provider.api_key or ""
+            # Register per-model rate limits (lazy init on first route)
+            if fb.rpm_limit or fb.rpd_limit or fb.tpm_limit or fb.tpd_limit:
+                per_key_rate_tracker.set_limits(
+                    provider.name, fb.model, active_key,
+                    rpm=fb.rpm_limit, rpd=fb.rpd_limit,
+                    tpm=fb.tpm_limit, tpd=fb.tpd_limit,
+                )
+            # Check per-key rate limits (RPM/RPD/TPM/TPD)
+            limited, reason = per_key_rate_tracker.is_limited(provider.name, fb.model, active_key)
+            if limited:
+                logger.debug(
+                    "Provider %s/%s is per-model rate limited: %s",
+                    provider.name, fb.model, reason,
+                )
+                continue
+            # Skip if this provider+model combo is on cooldown (recent 429)
             if per_key_rate_tracker.is_on_cooldown(provider.name, fb.model, active_key):
                 logger.debug(
                     "Provider %s/%s is on cooldown, skipping", provider.name, fb.model,

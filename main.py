@@ -641,6 +641,39 @@ async def api_status():
     }
 
 
+# ── Health & Key Health API ──────────────────────────────────────────────────
+@app.get("/api/health/keys")
+async def api_health_keys(authorization: str | None = Header(None)):
+    """Per-key health status for all providers."""
+    verify_master_key(authorization)
+    return health_checker.get_all_key_health()
+
+
+@app.get("/api/health/keys/{provider}")
+async def api_health_keys_provider(
+    provider: str, authorization: str | None = Header(None),
+):
+    """Per-key health status for a specific provider."""
+    verify_master_key(authorization)
+    if provider not in config.providers:
+        raise HTTPException(404, f"Provider '{provider}' not found")
+    return health_checker.get_key_health(provider)
+
+
+@app.post("/api/health/check")
+async def api_health_check_now(authorization: str | None = Header(None)):
+    """Trigger an immediate health check (providers + keys)."""
+    verify_master_key(authorization)
+    if not _client:
+        raise HTTPException(503, "Server not ready")
+    await health_checker.check_all(_client, config.providers)
+    await health_checker.check_all_keys(_client, config.providers)
+    return {
+        "providers": health_checker.get_all_health(),
+        "keys": health_checker.get_all_key_health(),
+    }
+
+
 # ── Model discovery ──────────────────────────────────────────────────────────
 @app.post("/api/discover")
 async def api_discover(authorization: str | None = Header(None)):
@@ -1257,8 +1290,18 @@ async def api_get_fallbacks(authorization: str | None = Header(None)):
                 "model": fb.model,
                 "enabled": fb.enabled,
                 "penalty": penalty,
+                "rpm_limit": fb.rpm_limit,
+                "rpd_limit": fb.rpd_limit,
+                "tpm_limit": fb.tpm_limit,
+                "tpd_limit": fb.tpd_limit,
             })
-        result.append({"model": model_name, "providers": providers})
+        result.append({
+            "model": model_name,
+            "providers": providers,
+            "intelligence_rank": model_cfg.intelligence_rank,
+            "speed_rank": model_cfg.speed_rank,
+            "monthly_token_budget": model_cfg.monthly_token_budget,
+        })
     return result
 
 
@@ -1316,7 +1359,7 @@ async def api_sort_fallbacks(
     preset: str,
     authorization: str | None = Header(None),
 ):
-    """Sort fallbacks by preset: priority (original), penalty, health."""
+    """Sort fallbacks by preset: priority, penalty, health, intelligence, speed, budget."""
     verify_master_key(authorization)
     model_cfg = config.models.get(model)
     if not model_cfg:
@@ -1336,11 +1379,31 @@ async def api_sort_fallbacks(
                 return 500
             return router.penalty_tracker.get_penalty(fb.provider, fb.model)
         model_cfg.fallbacks.sort(key=_health_key)
+    elif preset == "intelligence":
+        # Sort by intelligence rank descending (smartest first)
+        model_cfg.fallbacks.sort(
+            key=lambda fb: -_get_fallback_rank(fb, "intelligence"),
+        )
+    elif preset == "speed":
+        # Sort by speed rank descending (fastest first)
+        model_cfg.fallbacks.sort(
+            key=lambda fb: -_get_fallback_rank(fb, "speed"),
+        )
+    elif preset == "budget":
+        # Sort by ascending token usage (least used first)
+        usage = request_db.get_model_token_usage(30)
+        def _budget_key(fb: Any) -> int:
+            key = f"{fb.provider}:{fb.model}"
+            return usage.get(key, {}).get("total_tokens", 0)
+        model_cfg.fallbacks.sort(key=_budget_key)
     elif preset == "priority":
         # Reset to original order — no-op (already in original order)
         pass
     else:
-        raise HTTPException(400, f"Unknown preset '{preset}'. Use: priority, penalty, health")
+        raise HTTPException(
+            400,
+            f"Unknown preset '{preset}'. Use: priority, penalty, health, intelligence, speed, budget",
+        )
 
     return {
         "success": True,
@@ -1356,6 +1419,70 @@ async def api_sort_fallbacks(
             for fb in model_cfg.fallbacks
         ],
     }
+
+
+def _get_fallback_rank(fb: Any, rank_type: str) -> int:
+    """Get intelligence or speed rank for a fallback's model.
+
+    Looks up the rank from the ModelConfig that contains this fallback.
+    Falls back to 0 (unknown) if not found.
+    """
+    for _model_name, model_cfg in config.models.items():
+        for existing_fb in model_cfg.fallbacks:
+            if existing_fb.provider == fb.provider and existing_fb.model == fb.model:
+                if rank_type == "intelligence":
+                    return model_cfg.intelligence_rank
+                elif rank_type == "speed":
+                    return model_cfg.speed_rank
+    return 0
+
+
+@app.get("/api/fallbacks/token-usage")
+async def api_fallback_token_usage(authorization: str | None = Header(None)):
+    """Per-model token usage vs monthly budget."""
+    verify_master_key(authorization)
+    usage = request_db.get_model_token_usage(30)
+    result = []
+    for model_name, model_cfg in config.models.items():
+        model_usage = usage.get(model_name, {})
+        total_tokens = model_usage.get("total_tokens", 0)
+        budget = model_cfg.monthly_token_budget
+        result.append({
+            "model": model_name,
+            "budget": budget,
+            "used": total_tokens,
+            "remaining": max(0, budget - total_tokens) if budget > 0 else -1,
+            "unlimited": budget == 0,
+            "requests": model_usage.get("requests", 0),
+            "prompt_tokens": model_usage.get("prompt_tokens", 0),
+            "completion_tokens": model_usage.get("completion_tokens", 0),
+        })
+    return result
+
+
+@app.get("/api/models/{model}/limits")
+async def api_model_limits(model: str, authorization: str | None = Header(None)):
+    """Get per-model rate limits for all fallbacks."""
+    verify_master_key(authorization)
+    model_cfg = config.models.get(model)
+    if not model_cfg:
+        raise HTTPException(404, f"Model '{model}' not found")
+
+    limits = []
+    for fb in model_cfg.fallbacks:
+        provider = config.providers.get(fb.provider)
+        active_key = provider.api_key if provider else ""
+        key_usage = per_key_rate_tracker.get_usage(fb.provider, fb.model, active_key)
+        limits.append({
+            "provider": fb.provider,
+            "model": fb.model,
+            "rpm_limit": fb.rpm_limit,
+            "rpd_limit": fb.rpd_limit,
+            "tpm_limit": fb.tpm_limit,
+            "tpd_limit": fb.tpd_limit,
+            "current_usage": key_usage,
+        })
+    return {"model": model, "limits": limits}
 
 
 # ── Export Configs API ───────────────────────────────────────────────────────

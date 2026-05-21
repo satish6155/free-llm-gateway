@@ -346,6 +346,41 @@ class RequestDB:
             row = self._conn.execute("SELECT COUNT(*) FROM requests").fetchone()
         return row[0] if row else 0
 
+    def get_model_token_usage(self, days: int = 30) -> dict[str, dict[str, Any]]:
+        """Get token usage grouped by model name for the last N days.
+
+        Returns {model_name: {total_tokens, prompt_tokens, completion_tokens, requests}}.
+        """
+        if not self._conn:
+            return {}
+        since = time.time() - (days * 86400)
+        with self._lock:
+            rows = self._conn.execute(
+                """
+                SELECT
+                    model,
+                    COUNT(*) as requests,
+                    SUM(prompt_tokens) as total_input,
+                    SUM(completion_tokens) as total_output,
+                    SUM(total_tokens) as total_tokens
+                FROM requests
+                WHERE timestamp >= ? AND success = 1
+                GROUP BY model
+                ORDER BY total_tokens DESC
+                """,
+                (since,),
+            ).fetchall()
+
+        return {
+            r[0]: {
+                "requests": r[1],
+                "prompt_tokens": r[2] or 0,
+                "completion_tokens": r[3] or 0,
+                "total_tokens": r[4] or 0,
+            }
+            for r in rows
+        }
+
 
 # Global singleton
 request_db = RequestDB()
