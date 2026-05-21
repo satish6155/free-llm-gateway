@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import time
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -155,6 +156,13 @@ app = FastAPI(title="Free LLM Gateway", version="1.0.0", lifespan=lifespan)
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+# ── Liveness probe ─────────────────────────────────────────────────────────────
+@app.get("/api/ping")
+async def ping():
+    """Lightweight liveness probe for health checks and uptime monitoring."""
+    return {"status": "ok", "timestamp": time.time()}
 
 
 # ── Request validation (Pydantic models) ──────────────────────────────────────
@@ -485,6 +493,7 @@ async def list_models(authorization: str | None = Header(None)):
             "owned_by": "free-llm-gateway",
             "providers": providers,
             "context_window": model_cfg.context_window or None,
+            "size_label": model_cfg.size_label or None,
             "capabilities": {
                 "supports_tools": model_cfg.capabilities.supports_tools,
                 "supports_vision": model_cfg.capabilities.supports_vision,
@@ -1336,6 +1345,7 @@ async def api_get_fallbacks(authorization: str | None = Header(None)):
             "providers": providers,
             "intelligence_rank": model_cfg.intelligence_rank,
             "speed_rank": model_cfg.speed_rank,
+            "size_label": model_cfg.size_label or None,
             "monthly_token_budget": model_cfg.monthly_token_budget,
         })
     return result

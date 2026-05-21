@@ -103,6 +103,7 @@ class ModelConfig:
     intelligence_rank: int = 0  # 0 = unknown, higher = smarter
     speed_rank: int = 0  # 0 = unknown, higher = faster
     context_window: int = 0  # 0 = unknown, max context tokens (e.g. 128000)
+    size_label: str = ""  # e.g. "70B", "405B", "8B", empty = unknown
     meta: dict[str, Any] = field(default_factory=dict)
 
 
@@ -331,6 +332,9 @@ def _load_models() -> dict[str, ModelConfig]:
         inferred_intel, inferred_speed = _infer_ranks(model_name)
         # Parse context window from _meta.context (e.g. "256K", "1M", "128K (8K on free)")
         context_window = _parse_context_window(meta.get("context", "")) if isinstance(meta, dict) else 0
+        # Size label: explicit in YAML or inferred from model name
+        explicit_size = str(model_data.get("size_label", "")) if isinstance(model_data, dict) else ""
+        size_label = explicit_size or _infer_size_label(model_name)
         models[model_name] = ModelConfig(
             unified_name=model_name,
             fallbacks=fb_list,
@@ -339,9 +343,68 @@ def _load_models() -> dict[str, ModelConfig]:
             intelligence_rank=explicit_intel or inferred_intel,
             speed_rank=explicit_speed or inferred_speed,
             context_window=context_window,
+            size_label=size_label,
             meta=meta if isinstance(meta, dict) else {},
         )
     return models
+
+
+def _infer_size_label(model_name: str) -> str:
+    """Infer parameter count label from model name.
+
+    Returns a string like "70B", "405B", "8B", or "" if unknown.
+    """
+    import re
+    name = model_name.lower()
+
+    # Direct size patterns in name (e.g. "llama-3.3-70b", "gemma-3-27b")
+    m = re.search(r"(\d+(?:\.\d+)?)\s*[x×]?(\d+[bmk])", name)
+    if m:
+        return m.group(2).upper()
+
+    # Simple patterns like "70b", "405b", "8b"
+    m = re.search(r"(?<!\w)(\d+(?:\.\d+)?)([bmk])(?!\w)", name)
+    if m:
+        return f"{m.group(1)}{m.group(2).upper()}"
+
+    # Known model families with well-known sizes
+    size_map = {
+        # Llama
+        "llama-3.3-70b": "70B", "llama-3.1-8b": "8B", "llama-3.1-405b": "405B",
+        "llama-4-maverick": "400B", "llama-4-scout": "109B",
+        # Qwen
+        "qwen3-32b": "32B", "qwen3-8b": "8B", "qwen2.5-72b": "72B",
+        "qwen2.5-7b": "7B", "qwen2.5-coder": "32B", "qwen3-coder": "480B",
+        "qwen3.5-35b": "35B", "qwen3.5-27b": "27B", "qwen3-235b": "235B",
+        "qwen3-next-80b": "80B",
+        # Gemma
+        "gemma-4-31b": "31B", "gemma-4-26b": "26B", "gemma-3-27b": "27B",
+        "gemma-3-12b": "12B", "gemma-3-4b": "4B", "gemma-3-1b": "1B",
+        # Mistral
+        "mistral-large": "123B", "mistral-small": "22B", "mistral-medium": "75B",
+        "mistral-7b": "7B", "mixtral-8x7b": "47B", "codestral": "22B",
+        "open-mistral-nemo": "12B",
+        # DeepSeek
+        "deepseek-r1": "671B", "deepseek-v3": "685B", "deepseek-chat-v3": "685B",
+        # Nemotron
+        "nemotron-super": "253B", "nemotron-ultra": "253B", "nemotron-nano": "8B",
+        # GPT
+        "gpt-4.1": "1.8T", "gpt-4o": "200B", "o3-mini": "100B", "o4-mini": "100B",
+        # Gemini
+        "gemini-2.5-flash": "540B", "gemini-2.0-flash": "540B",
+        # Others
+        "hermes-3-405b": "405B", "command-a": "111B", "command-r-plus": "104B",
+        "command-r": "35B", "command-r7b": "7B",
+        "minimax-m2": "456B", "pixtral-large": "123B",
+        "phi-3.5": "3.8B", "glm-4": "9B", "glm-4.5": "9B",
+        "dolphin-mistral-24b": "24B", "gpt-oss-120b": "120B",
+        "gpt-oss-20b": "20B",
+    }
+    for key, label in size_map.items():
+        if key in name:
+            return label
+
+    return ""
 
 
 def _infer_ranks(model_name: str) -> tuple[int, int]:
