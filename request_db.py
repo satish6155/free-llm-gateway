@@ -321,9 +321,42 @@ class RequestDB:
                 (since,),
             ).fetchall()
 
+            # Detailed: provider × category cross-product
+            detailed = self._conn.execute(
+                """
+                SELECT
+                    provider,
+                    CASE
+                        WHEN error LIKE '%429%' OR error LIKE '%rate limit%' OR error LIKE '%rate%'
+                            THEN 'Rate Limited (429)'
+                        WHEN error LIKE '%timeout%' OR error LIKE '%timed out%'
+                            THEN 'Timeout'
+                        WHEN error LIKE '%401%' OR error LIKE '%unauthorized%'
+                            THEN 'Auth Error (401)'
+                        WHEN error LIKE '%403%' OR error LIKE '%forbidden%'
+                            THEN 'Forbidden (403)'
+                        WHEN error LIKE '%500%' OR error LIKE '%internal%'
+                            THEN 'Server Error (500)'
+                        WHEN error LIKE '%502%' OR error LIKE '%503%' OR error LIKE '%unavailable%'
+                            THEN 'Server Error (502/503)'
+                        ELSE 'Other'
+                    END as category,
+                    COUNT(*) as count
+                FROM requests
+                WHERE success = 0 AND timestamp >= ?
+                GROUP BY provider, category
+                ORDER BY count DESC
+                """,
+                (since,),
+            ).fetchall()
+
         return {
             "by_category": [{"category": r[0], "count": r[1]} for r in by_category],
             "by_provider": [{"provider": r[0], "count": r[1]} for r in by_provider],
+            "detailed": [
+                {"provider": r[0], "category": r[1], "count": r[2]}
+                for r in detailed
+            ],
             "recent": [
                 {
                     "id": r[0],

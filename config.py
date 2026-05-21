@@ -33,9 +33,16 @@ class ProviderConfig:
 
     @property
     def api_key(self) -> str:
-        """Current active API key (round-robin)."""
+        """Current active API key (round-robin), skipping disabled keys."""
         if not self.api_keys:
             return ""
+        # Find a non-disabled key starting from current index
+        for _ in range(len(self.api_keys)):
+            key = self.api_keys[self._key_index % len(self.api_keys)]
+            if key not in self.disabled_keys:
+                return key
+            self._key_index = (self._key_index + 1) % len(self.api_keys)
+        # All keys disabled — return current anyway as fallback
         return self.api_keys[self._key_index % len(self.api_keys)]
 
     @api_key.setter
@@ -56,9 +63,16 @@ class ProviderConfig:
         return len(self.api_keys)
 
     def rotate_key(self) -> str:
-        """Advance to next key (round-robin) and return it."""
+        """Advance to next non-disabled key (round-robin)."""
         if self.api_keys:
-            self._key_index = (self._key_index + 1) % len(self.api_keys)
+            start = self._key_index
+            for _ in range(len(self.api_keys)):
+                self._key_index = (self._key_index + 1) % len(self.api_keys)
+                key = self.api_keys[self._key_index]
+                if key not in self.disabled_keys:
+                    return key
+            # All disabled — just advance and return
+            self._key_index = (start + 1) % len(self.api_keys)
         return self.api_key
 
 
@@ -88,6 +102,7 @@ class ModelConfig:
     monthly_token_budget: int = 0  # 0 = unlimited
     intelligence_rank: int = 0  # 0 = unknown, higher = smarter
     speed_rank: int = 0  # 0 = unknown, higher = faster
+    context_window: int = 0  # 0 = unknown, max context tokens (e.g. 128000)
     meta: dict[str, Any] = field(default_factory=dict)
 
 
@@ -184,6 +199,28 @@ def _load_providers() -> dict[str, ProviderConfig]:
             rpm_limit=int(os.environ.get("DEFAULT_RPM_LIMIT", "0")),
         )
     return providers
+
+
+def _parse_context_window(ctx: str) -> int:
+    """Parse a context string like '256K', '1M', '128K (8K on free)' into tokens.
+
+    Returns 0 if unparseable.
+    """
+    if not ctx:
+        return 0
+    import re
+    # Strip parenthetical notes, take the first number
+    cleaned = re.sub(r"\(.*?\)", "", str(ctx)).strip()
+    m = re.match(r"~?([\d,]+\.?\d*)\s*([KM]?)", cleaned, re.IGNORECASE)
+    if not m:
+        return 0
+    num = float(m.group(1).replace(",", ""))
+    unit = m.group(2).upper()
+    if unit == "K":
+        return int(num * 1_000)
+    if unit == "M":
+        return int(num * 1_000_000)
+    return int(num)
 
 
 def _parse_rate_limit(rate_str: str) -> dict[str, int]:
@@ -292,6 +329,8 @@ def _load_models() -> dict[str, ModelConfig]:
         explicit_intel = int(model_data.get("intelligence_rank", 0)) if isinstance(model_data, dict) else 0
         explicit_speed = int(model_data.get("speed_rank", 0)) if isinstance(model_data, dict) else 0
         inferred_intel, inferred_speed = _infer_ranks(model_name)
+        # Parse context window from _meta.context (e.g. "256K", "1M", "128K (8K on free)")
+        context_window = _parse_context_window(meta.get("context", "")) if isinstance(meta, dict) else 0
         models[model_name] = ModelConfig(
             unified_name=model_name,
             fallbacks=fb_list,
@@ -299,6 +338,7 @@ def _load_models() -> dict[str, ModelConfig]:
             monthly_token_budget=int(model_data.get("monthly_token_budget", 0)) if isinstance(model_data, dict) else 0,
             intelligence_rank=explicit_intel or inferred_intel,
             speed_rank=explicit_speed or inferred_speed,
+            context_window=context_window,
             meta=meta if isinstance(meta, dict) else {},
         )
     return models

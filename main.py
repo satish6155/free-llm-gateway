@@ -484,6 +484,7 @@ async def list_models(authorization: str | None = Header(None)):
             "object": "model",
             "owned_by": "free-llm-gateway",
             "providers": providers,
+            "context_window": model_cfg.context_window or None,
             "capabilities": {
                 "supports_tools": model_cfg.capabilities.supports_tools,
                 "supports_vision": model_cfg.capabilities.supports_vision,
@@ -849,6 +850,41 @@ async def validate_key(provider: str, index: int):
     except Exception as e:
         key_manager.set_validated(provider, index, False)
         return {"valid": False, "error": str(e)[:200]}
+
+
+@app.patch("/api/keys/{provider}/{index}/toggle")
+async def toggle_key(provider: str, index: int, request: Request):
+    """Enable or disable a specific API key by index.
+
+    Disabled keys are added to the provider's disabled_keys list and
+    skipped during routing. Re-enabling removes them from that list.
+    """
+    body = await request.json()
+    enabled = body.get("enabled")
+    if not isinstance(enabled, bool):
+        raise HTTPException(400, "Field 'enabled' must be a boolean")
+
+    prov = config.providers.get(provider)
+    if not prov:
+        raise HTTPException(404, f"Provider '{provider}' not found")
+    if index < 0 or index >= len(prov.api_keys):
+        raise HTTPException(404, "Key index out of range")
+
+    key = prov.api_keys[index]
+    if enabled:
+        if key in prov.disabled_keys:
+            prov.disabled_keys.remove(key)
+    else:
+        if key not in prov.disabled_keys:
+            prov.disabled_keys.append(key)
+
+    return {
+        "success": True,
+        "provider": provider,
+        "key_index": index,
+        "enabled": enabled,
+        "disabled_keys_count": len(prov.disabled_keys),
+    }
 
 
 # ── Connection info & Config export ──────────────────────────────────────────
