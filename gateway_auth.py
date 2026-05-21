@@ -8,6 +8,7 @@ Supports multiple user keys with different permissions and rate limits.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import logging
 import secrets
@@ -132,12 +133,21 @@ class GatewayAuthManager:
         return raw_key, gw_key
 
     def validate_key(self, raw_key: str) -> GatewayKey | None:
-        """Validate a gateway API key. Returns GatewayKey if valid."""
+        """Validate a gateway API key. Returns GatewayKey if valid.
+
+        Uses constant-time comparison for hash lookup to prevent timing attacks.
+        """
         if not raw_key.startswith(self.GATEWAY_KEY_PREFIX):
             return None
 
         key_hash = self._hash_key(raw_key)
-        gw_key = self._keys.get(key_hash)
+        # Constant-time comparison: compare hash against every stored key
+        # so timing doesn't reveal which hash matched.
+        gw_key = None
+        for stored_hash, stored_key in self._keys.items():
+            if hmac.compare_digest(key_hash, stored_hash):
+                gw_key = stored_key
+                break
 
         if not gw_key:
             return None
