@@ -1,8 +1,11 @@
 {
-  "last_sync": "2026-04-24T22:52:18.523232",
-  "upstream_date": "2026-04-20",
+  "last_sync": "2026-05-24T01:00:49.627799",
+  "upstream_date": "2026-05-20",
   "providers_known": [
+    "ai21_labs",
+    "alibaba_cloud_model_studio",
     "cohere",
+    "deepseek",
     "google_gemini",
     "mistral",
     "z_ai_zhipu_ai",
@@ -14,10 +17,15 @@
     "kilo_code",
     "llm7.io",
     "modelscope",
+    "nebius",
+    "nscale",
     "nvidia_nim",
     "ollama",
     "openrouter",
-    "siliconflow"
+    "ovhcloud_ai_endpoints",
+    "siliconflow",
+    "aion_labs",
+    "xai"
   ],
   "sync_log": [
     {
@@ -54,6 +62,34 @@
       "new_models": 0,
       "updated_models": 0,
       "total_models": 115
+    },
+    {
+      "date": "2026-05-03T01:00:37.922606",
+      "upstream_date": "2026-04-29",
+      "new_models": 10,
+      "updated_models": 0,
+      "total_models": 125
+    },
+    {
+      "date": "2026-05-10T01:00:49.339269",
+      "upstream_date": "2026-04-29",
+      "new_models": 0,
+      "updated_models": 0,
+      "total_models": 125
+    },
+    {
+      "date": "2026-05-17T01:01:04.736382",
+      "upstream_date": "2026-04-29",
+      "new_models": 0,
+      "updated_models": 0,
+      "total_models": 125
+    },
+    {
+      "date": "2026-05-24T01:00:49.623975",
+      "upstream_date": "2026-05-20",
+      "new_models": 46,
+      "updated_models": 4,
+      "total_models": 171
     }
   ]
 }

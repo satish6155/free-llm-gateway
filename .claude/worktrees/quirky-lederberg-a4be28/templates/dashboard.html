@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Free LLM Gateway</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<!-- Mobile hamburger -->
+<button id="hamburger" class="hamburger">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+</button>
+<div id="overlay" class="overlay"></div>
+
+<!-- Sidebar -->
+<nav id="sidebar" class="sidebar">
+  <div class="sidebar-header">
+    <h1>LLM Gateway</h1>
+    <p>Unified free API proxy</p>
+  </div>
+  <div class="sidebar-nav">
+    <div class="nav-item active" data-tab="models">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      Models
+    </div>
+    <div class="nav-item" data-tab="providers">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/></svg>
+      Providers
+    </div>
+    <div class="nav-item" data-tab="usage">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+      Usage
+    </div>
+    <div class="nav-item" data-tab="analytics">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10M18 20V4M6 20v-6"/></svg>
+      Analytics
+    </div>
+    <div class="nav-item" data-tab="benchmarks">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg>
+      Benchmarks
+    </div>
+    <div class="nav-item" data-tab="cache">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
+      Cache &amp; Queue
+    </div>
+    <div class="nav-item" data-tab="combos">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+      Combos
+    </div>
+    <div class="nav-item" data-tab="quotas">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 100 20 10 10 0 000-20z"/><path d="M12 6v6l4 2"/></svg>
+      Quotas
+    </div>
+    <div class="nav-item" data-tab="oauth">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      OAuth
+    </div>
+    <div class="nav-item" data-tab="setup">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      Setup
+    </div>
+    <div class="nav-item" data-tab="keys">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.78 7.78 5.5 5.5 0 017.78-7.78zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+      Keys
+    </div>
+    <div class="nav-item" data-tab="logs">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      Logs
+    </div>
+    <div class="nav-item" data-tab="playground">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13,2 3,14 12,14 11,22 21,10 12,10"/></svg>
+      Playground
+    </div>
+    <div class="nav-item" data-tab="ratetracking">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10M18 20V4M6 20v-6"/><circle cx="12" cy="12" r="10"/></svg>
+      Rate Tracking
+    </div>
+    <div class="nav-item" data-tab="sessions">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+      Sessions
+    </div>
+    <div class="nav-item" data-tab="gatewaykeys">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+      Gateway Keys
+    </div>
+    <div class="nav-item" data-tab="richanalytics">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><polyline points="18,9 13,14 9,10 3,16"/></svg>
+      Rich Analytics
+    </div>
+    <div class="nav-item" data-tab="fallbacks">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+      Fallbacks
+    </div>
+  </div>
+  <div class="sidebar-footer">
+    <span id="live-dot" class="live-dot"></span> Live &middot; Auto-refresh 10s
+  </div>
+</nav>
+
+<!-- Main Content -->
+<div class="main">
+  <div class="content">
+
+    <!-- Stats bar -->
+    <div class="stats">
+      <div class="stat-card">
+        <div class="label">Models</div>
+        <div class="value" id="stat-models">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Active Providers</div>
+        <div class="value" id="stat-providers">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Today's Requests</div>
+        <div class="value" id="stat-requests">0</div>
+        <div class="sub" id="stat-tokens"></div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Est. Savings Today</div>
+        <div class="value savings" id="stat-savings">$0.00</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Cache Hit Rate</div>
+        <div class="value" id="stat-cache-rate">0%</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Endpoint</div>
+        <div class="value" style="font-size:13px;margin-top:8px">/v1/chat/completions</div>
+      </div>
+    </div>
+
+    <!-- Models Tab -->
+    <div id="tab-models" class="tab-panel active">
+      <div class="page-header">
+        <h2>Models</h2>
+      </div>
+      <table>
+        <thead><tr><th>Model</th><th>Active Provider</th><th>Fallback Chain</th><th>Available</th></tr></thead>
+        <tbody id="models-tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- Providers Tab -->
+    <div id="tab-providers" class="tab-panel">
+      <div class="page-header">
+        <h2>Providers</h2>
+      </div>
+      <div id="provider-grid" class="provider-grid"></div>
+    </div>
+
+    <!-- Usage Tab -->
+    <div id="tab-usage" class="tab-panel">
+      <div class="page-header">
+        <h2>Usage &amp; Savings</h2>
+      </div>
+      <div class="mini-stats" id="usage-summary"></div>
+      <div class="chart-container" id="usage-chart"></div>
+      <div id="usage-models-table"></div>
+    </div>
+
+    <!-- Analytics Tab -->
+    <div id="tab-analytics" class="tab-panel">
+      <div class="page-header">
+        <h2>Analytics</h2>
+        <div class="header-actions">
+          <button class="refresh-btn" id="analytics-refresh-btn">Refresh</button>
+        </div>
+      </div>
+      <div class="mini-stats" id="analytics-summary"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+        <div class="chart-container">
+          <h3>Top Models</h3>
+          <div id="analytics-top-models"></div>
+        </div>
+        <div class="chart-container">
+          <h3>Provider Success Rates</h3>
+          <div id="analytics-provider-rates"></div>
+        </div>
+      </div>
+      <div class="chart-container">
+        <h3>Estimated Savings (GPT-4 Pricing)</h3>
+        <div id="analytics-savings"></div>
+      </div>
+    </div>
+
+    <!-- Benchmarks Tab -->
+    <div id="tab-benchmarks" class="tab-panel">
+      <div class="page-header">
+        <h2>Model Benchmarks</h2>
+        <div class="header-actions">
+          <button class="btn btn-primary" id="run-benchmark-btn">Run Benchmarks</button>
+        </div>
+      </div>
+      <div id="benchmark-status" style="margin-bottom:16px"></div>
+      <table>
+        <thead><tr><th>Rank</th><th>Model</th><th>Provider</th><th>Latency</th><th>TTFT</th><th>Tokens/sec</th><th>Status</th></tr></thead>
+        <tbody id="benchmarks-tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- Cache & Queue Tab -->
+    <div id="tab-cache" class="tab-panel">
+      <div class="page-header">
+        <h2>Cache &amp; Queue</h2>
+      </div>
+      <div id="cache-section"></div>
+      <div id="queue-section"></div>
+    </div>
+
+    <!-- Combos Tab -->
+    <div id="tab-combos" class="tab-panel">
+      <div class="page-header">
+        <h2>Custom Combos</h2>
+        <div class="header-actions">
+          <button class="btn btn-primary" id="create-combo-btn">Create Combo</button>
+        </div>
+      </div>
+      <div class="combo-info" style="margin-bottom:16px;padding:12px 16px;background:var(--bg-card);border-radius:8px;border:1px solid var(--border)">
+        <p style="margin:0;color:var(--text-muted)">Combos let you define custom model fallback chains. Create a named combo with providers and models, then use the combo name as your model in API requests.</p>
+      </div>
+      <div id="combo-create-form" style="display:none;margin-bottom:16px;padding:16px;background:var(--bg-card);border-radius:8px;border:1px solid var(--border)">
+        <h3 style="margin:0 0 12px">New Combo</h3>
+        <div class="form-group" style="margin-bottom:8px">
+          <label>Name</label>
+          <input type="text" id="combo-name" placeholder="my-custom-model" style="width:100%">
+        </div>
+        <div class="form-group" style="margin-bottom:8px">
+          <label>Description</label>
+          <input type="text" id="combo-desc" placeholder="Fast model with Groq fallback" style="width:100%">
+        </div>
+        <div id="combo-entries">
+          <label>Fallback Chain (ordered)</label>
+          <div class="combo-entry-row" style="display:flex;gap:8px;margin-bottom:4px">
+            <input type="text" placeholder="Provider (e.g. openrouter)" class="combo-provider" style="flex:1">
+            <input type="text" placeholder="Model ID" class="combo-model" style="flex:1">
+            <input type="number" placeholder="Weight" class="combo-weight" value="1" style="width:70px">
+          </div>
+        </div>
+        <button type="button" id="add-combo-entry-btn" style="margin:8px 0;padding:4px 12px;background:var(--bg-hover);border:1px solid var(--border);border-radius:4px;color:var(--text);cursor:pointer">+ Add Entry</button>
+        <div style="margin-top:8px">
+          <button class="btn btn-primary" id="save-combo-btn">Save Combo</button>
+          <button class="btn" id="cancel-combo-btn" style="margin-left:8px">Cancel</button>
+        </div>
+      </div>
+      <table>
+        <thead><tr><th>Name</th><th>Description</th><th>Fallback Chain</th><th>Actions</th></tr></thead>
+        <tbody id="combos-tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- Quotas Tab -->
+    <div id="tab-quotas" class="tab-panel">
+      <div class="page-header">
+        <h2>Quota Tracker</h2>
+        <div class="header-actions">
+          <button class="refresh-btn" id="quotas-refresh-btn">Refresh</button>
+        </div>
+      </div>
+      <div class="quota-info" style="margin-bottom:16px;padding:12px 16px;background:var(--bg-card);border-radius:8px;border:1px solid var(--border)">
+        <p style="margin:0;color:var(--text-muted)">Real-time quota tracking per provider with countdown to reset. Limits are based on known free tier allowances.</p>
+      </div>
+      <div id="quotas-grid" class="provider-grid"></div>
+    </div>
+
+    <!-- OAuth Tab -->
+    <div id="tab-oauth" class="tab-panel">
+      <div class="page-header">
+        <h2>OAuth Connections</h2>
+      </div>
+      <div class="oauth-info" style="margin-bottom:16px;padding:12px 16px;background:var(--bg-card);border-radius:8px;border:1px solid var(--border)">
+        <p style="margin:0;color:var(--text-muted)">Connect subscription providers (Claude Pro, GitHub Copilot, Cursor) via OAuth. Tokens auto-refresh when expired.</p>
+      </div>
+      <div id="oauth-grid" class="provider-grid"></div>
+    </div>
+
+    <!-- Setup Tab -->
+    <div id="tab-setup" class="tab-panel">
+      <div class="page-header">
+        <h2>Setup &amp; Connection</h2>
+      </div>
+      <div id="setup-content"></div>
+    </div>
+
+    <!-- Keys Tab -->
+    <div id="tab-keys" class="tab-panel">
+      <div class="page-header">
+        <h2>API Key Management</h2>
+      </div>
+      <form id="key-form" class="key-form">
+        <div class="form-group">
+          <label for="key-provider">Provider</label>
+          <select id="key-provider">
+            <option value="openrouter">openrouter</option>
+            <option value="github">github</option>
+            <option value="groq">groq</option>
+            <option value="cerebras">cerebras</option>
+            <option value="cloudflare">cloudflare</option>
+            <option value="huggingface">huggingface</option>
+            <option value="nvidia">nvidia</option>
+            <option value="siliconflow">siliconflow</option>
+            <option value="cohere">cohere</option>
+            <option value="google_gemini">google_gemini</option>
+            <option value="mistral">mistral</option>
+            <option value="kilo">kilo</option>
+            <option value="llm7">llm7</option>
+            <option value="ollama">ollama</option>
+            <option value="deepseek">deepseek</option>
+            <option value="together">together</option>
+            <option value="fireworks">fireworks</option>
+            <option value="sambanova">sambanova</option>
+            <option value="chutes">chutes</option>
+            <option value="anthropic">anthropic</option>
+            <option value="openai">openai</option>
+            <option value="perplexity">perplexity</option>
+            <option value="xai">xai</option>
+            <option value="novita">novita</option>
+            <option value="z_ai">z_ai</option>
+            <option value="modelscope">modelscope</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:1;min-width:240px">
+          <label for="key-value">API Key</label>
+          <input type="password" id="key-value" placeholder="sk-..." autocomplete="off">
+        </div>
+        <button type="submit" class="btn btn-primary">Add Key</button>
+      </form>
+      <div id="keys-list"></div>
+    </div>
+
+    <!-- Logs Tab -->
+    <div id="tab-logs" class="tab-panel">
+      <div class="page-header">
+        <h2>Request Logs</h2>
+      </div>
+      <div class="log-container">
+        <div class="log-table-wrap">
+          <table>
+            <thead><tr><th>Time</th><th>Model</th><th>Provider</th><th>Provider Model</th><th>Latency</th><th>Tokens</th><th>Status</th></tr></thead>
+            <tbody id="logs-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Rich Analytics Tab -->
+    <div id="tab-richanalytics" class="tab-panel">
+      <div class="page-header">
+        <h2>Rich Analytics</h2>
+        <div class="header-actions">
+          <select id="ra-range" style="background:var(--bg-card);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:13px">
+            <option value="24h">Last 24 Hours</option>
+            <option value="7d" selected>Last 7 Days</option>
+            <option value="30d">Last 30 Days</option>
+          </select>
+          <button class="refresh-btn" id="ra-refresh-btn">Refresh</button>
+        </div>
+      </div>
+      <div class="mini-stats" id="ra-summary"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+        <div class="chart-container">
+          <h3>Requests by Model</h3>
+          <div id="ra-by-model"></div>
+        </div>
+        <div class="chart-container">
+          <h3>Requests by Provider</h3>
+          <div id="ra-by-provider"></div>
+        </div>
+      </div>
+      <div class="chart-container">
+        <h3>Request Timeline</h3>
+        <div id="ra-timeline"></div>
+      </div>
+      <div class="chart-container" style="margin-top:16px">
+        <h3>Error Distribution</h3>
+        <div id="ra-errors"></div>
+      </div>
+    </div>
+
+    <!-- Fallbacks Tab -->
+    <div id="tab-fallbacks" class="tab-panel">
+      <div class="page-header">
+        <h2>Fallback Chains</h2>
+        <div class="header-actions">
+          <button class="refresh-btn" id="fb-refresh-btn">Refresh</button>
+        </div>
+      </div>
+      <div style="margin-bottom:16px;padding:12px 16px;background:var(--bg-card);border-radius:8px;border:1px solid var(--border)">
+        <p style="margin:0;color:var(--text-muted)">Manage fallback chains at runtime. Toggle providers on/off, reorder with drag buttons, or use sort presets. Changes take effect immediately without restart.</p>
+      </div>
+      <div id="fb-models-list"></div>
+    </div>
+
+  </div>
+</div>
+
+
+    <!-- Playground Tab -->
+    <div id="tab-playground" class="tab-panel">
+      <div class="page-header">
+        <h2>Playground</h2>
+        <p style="color:var(--text-muted);margin:0">Test models interactively with real-time streaming responses.</p>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div>
+          <div class="form-group" style="margin-bottom:8px">
+            <label>Model</label>
+            <select id="pg-model" style="width:100%;background:var(--bg-card);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px">
+              <option value="">Loading models...</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:8px">
+            <label>System Prompt</label>
+            <textarea id="pg-system" rows="2" placeholder="You are a helpful assistant." style="width:100%;background:var(--bg-card);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-family:monospace;resize:vertical"></textarea>
+          </div>
+          <div class="form-group" style="margin-bottom:8px">
+            <label>Message</label>
+            <textarea id="pg-message" rows="5" placeholder="Type your message here..." style="width:100%;background:var(--bg-card);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-family:monospace;resize:vertical"></textarea>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <label style="color:var(--text-muted);font-size:12px">Temperature: <span id="pg-temp-val">0.7</span></label>
+            <input type="range" id="pg-temp" min="0" max="2" step="0.1" value="0.7" style="flex:1">
+            <label style="color:var(--text-muted);font-size:12px">Max Tokens:</label>
+            <input type="number" id="pg-max-tokens" value="1024" min="1" max="16384" style="width:80px;background:var(--bg-card);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px">
+          </div>
+          <div style="margin-top:12px;display:flex;gap:8px">
+            <button class="btn btn-primary" id="pg-send-btn">Send</button>
+            <button class="btn" id="pg-clear-btn">Clear</button>
+          </div>
+        </div>
+        <div>
+          <label style="display:block;margin-bottom:4px">Response</label>
+          <div id="pg-response" style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:16px;min-height:300px;max-height:500px;overflow-y:auto;font-family:monospace;font-size:13px;white-space:pre-wrap;color:var(--text);line-height:1.6"><span style="color:var(--text-muted)">Response will appear here...</span></div>
+          <div id="pg-meta" style="margin-top:8px;font-size:12px;color:var(--text-muted)"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Rate Tracking Tab -->
+    <div id="tab-ratetracking" class="tab-panel">
+      <div class="page-header">
+        <h2>Per-Key Rate Tracking</h2>
+        <div class="header-actions">
+          <button class="refresh-btn" id="rt-refresh-btn">Refresh</button>
+        </div>
+      </div>
+      <div style="margin-bottom:16px;padding:12px 16px;background:var(--bg-card);border-radius:8px;border:1px solid var(--border)">
+        <p style="margin:0;color:var(--text-muted)">Track RPM/RPD/TPM/TPD usage per provider, model, and API key. Helps stay within free-tier limits.</p>
+      </div>
+      <div id="rt-summary" class="mini-stats"></div>
+      <table>
+        <thead><tr><th>Provider</th><th>Model</th><th>RPM</th><th>RPD</th><th>TPM</th><th>TPD</th><th>Status</th></tr></thead>
+        <tbody id="rt-tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- Sessions Tab -->
+    <div id="tab-sessions" class="tab-panel">
+      <div class="page-header">
+        <h2>Sticky Sessions</h2>
+        <div class="header-actions">
+          <button class="refresh-btn" id="sess-refresh-btn">Refresh</button>
+          <button class="btn btn-danger" id="sess-cleanup-btn">Cleanup Expired</button>
+        </div>
+      </div>
+      <div style="margin-bottom:16px;padding:12px 16px;background:var(--bg-card);border-radius:8px;border:1px solid var(--border)">
+        <p style="margin:0;color:var(--text-muted)">Sticky sessions maintain provider affinity for 30 minutes, ensuring conversation continuity with the same model provider.</p>
+      </div>
+      <div id="sess-summary" class="mini-stats"></div>
+      <table>
+        <thead><tr><th>Session ID</th><th>Provider</th><th>Model</th><th>Created</th><th>Expires</th><th>Actions</th></tr></thead>
+        <tbody id="sess-tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- Gateway Keys Tab -->
+    <div id="tab-gatewaykeys" class="tab-panel">
+      <div class="page-header">
+        <h2>Gateway API Keys</h2>
+      </div>
+      <div style="margin-bottom:16px;padding:12px 16px;background:var(--bg-card);border-radius:8px;border:1px solid var(--border)">
+        <p style="margin:0;color:var(--text-muted)">Create gateway API keys (fgk-...) to control access with per-key permissions, model restrictions, and rate limits.</p>
+      </div>
+      <form id="gwkey-form" style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-bottom:16px;align-items:end">
+        <div class="form-group">
+          <label>Key Name</label>
+          <input type="text" id="gwkey-name" placeholder="my-user" style="width:100%;background:var(--bg-card);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px">
+        </div>
+        <div class="form-group">
+          <label>Admin Key</label>
+          <select id="gwkey-admin" style="width:100%;background:var(--bg-card);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px">
+            <option value="false">Regular User</option>
+            <option value="true">Admin</option>
+          </select>
+        </div>
+        <button type="submit" class="btn btn-primary">Create Key</button>
+      </form>
+      <table>
+        <thead><tr><th>Name</th><th>Status</th><th>Admin</th><th>Requests</th><th>Created</th><th>Actions</th></tr></thead>
+        <tbody id="gwkey-tbody"></tbody>
+      </table>
+    </div>
+
+<script src="/static/app.js?v=9"></script>
+</body>
+</html>

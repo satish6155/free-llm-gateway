@@ -1,6 +1,6 @@
 # Free LLM Gateway — Model definitions with provider fallback chains
 # Auto-synced from awesome-free-llm-apis. Manual edits preserved.
-# Last sync: 2026-04-24T22:52:18.470709
+# Last sync: 2026-05-24T01:00:49.545257
 
 models:
   llama-3.3-70b:
@@ -13,6 +13,8 @@ models:
       model: meta-llama/llama-3.3-70b-instruct:free
     - provider: nvidia
       model: meta/llama-3.1-405b-instruct
+    - provider: cerebras
+      model: llama-3.3-70b
   llama-3.1-8b:
     capabilities:
       supports_tools: true
@@ -697,6 +699,8 @@ models:
     fallbacks:
     - provider: groq
       model: llama-4-scout-17b-16e-instruct
+    - provider: cerebras
+      model: llama-4-scout-17b-16e-instruct
     _meta:
       name: llama-4-scout-17b-16e-instruct
       context: 131K
@@ -1323,6 +1327,8 @@ models:
     fallbacks:
     - provider: openrouter
       model: minimax/minimax-m2.5:free
+    - provider: kilo_code
+      model: minimax/minimax-m2.5:free
     _meta:
       name: minimax/minimax-m2.5:free
       context: 196K
@@ -1419,3 +1425,733 @@ models:
       context: —
       modality: Vision (OCR)
       rate_limit: 1,000 RPM, 50K TPM
+  Meta-Llama-3_3-70B-Instruct:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: ovhcloud_ai_endpoints
+      model: Meta-Llama-3_3-70B-Instruct
+    _meta:
+      name: Meta-Llama-3_3-70B-Instruct
+      context: 131K
+      modality: Text
+      rate_limit: 2 RPM (anonymous)
+  Meta-Llama-3_1-8B-Instruct:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: ovhcloud_ai_endpoints
+      model: Meta-Llama-3_1-8B-Instruct
+    _meta:
+      name: Meta-Llama-3_1-8B-Instruct
+      context: 131K
+      modality: Text
+      rate_limit: 2 RPM (anonymous)
+  DeepSeek-R1-Distill-Llama-70B:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: ovhcloud_ai_endpoints
+      model: DeepSeek-R1-Distill-Llama-70B
+    _meta:
+      name: DeepSeek-R1-Distill-Llama-70B
+      context: 131K
+      modality: Text (reasoning)
+      rate_limit: 2 RPM (anonymous)
+  Qwen3-32B:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: ovhcloud_ai_endpoints
+      model: Qwen3-32B
+    _meta:
+      name: Qwen3-32B
+      context: 131K
+      modality: Text
+      rate_limit: 2 RPM (anonymous)
+  Qwen3-Coder-30B-A3B-Instruct:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: ovhcloud_ai_endpoints
+      model: Qwen3-Coder-30B-A3B-Instruct
+    _meta:
+      name: Qwen3-Coder-30B-A3B-Instruct
+      context: 262K
+      modality: Text (code)
+      rate_limit: 2 RPM (anonymous)
+  Qwen2.5-VL-72B-Instruct:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: ovhcloud_ai_endpoints
+      model: Qwen2.5-VL-72B-Instruct
+    _meta:
+      name: Qwen2.5-VL-72B-Instruct
+      context: 128K
+      modality: Text + Vision
+      rate_limit: 2 RPM (anonymous)
+  Mixtral-8x7B-Instruct-v0.1:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: ovhcloud_ai_endpoints
+      model: Mixtral-8x7B-Instruct-v0.1
+    _meta:
+      name: Mixtral-8x7B-Instruct-v0.1
+      context: 32K
+      modality: Text
+      rate_limit: 2 RPM (anonymous)
+  Mistral-Nemo-Instruct-2407:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: ovhcloud_ai_endpoints
+      model: Mistral-Nemo-Instruct-2407
+    _meta:
+      name: Mistral-Nemo-Instruct-2407
+      context: 128K
+      modality: Text
+      rate_limit: 2 RPM (anonymous)
+  Qwen3Guard-Gen-8B:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: ovhcloud_ai_endpoints
+      model: Qwen3Guard-Gen-8B
+    _meta:
+      name: Qwen3Guard-Gen-8B
+      context: 32K
+      modality: Text (safety guard)
+      rate_limit: 2 RPM (anonymous)
+  Qwen3Guard-Gen-0.6B:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: ovhcloud_ai_endpoints
+      model: Qwen3Guard-Gen-0.6B
+    _meta:
+      name: Qwen3Guard-Gen-0.6B
+      context: 32K
+      modality: Text (safety guard)
+      rate_limit: 2 RPM (anonymous)
+  jamba-large:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: ai21_labs
+      model: jamba-large
+    _meta:
+      name: Jamba Large 1.7
+      context: 256K
+      modality: Text
+      rate_limit: 200 RPM, 10 RPS
+  jamba-mini:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: ai21_labs
+      model: jamba-mini
+    _meta:
+      name: Jamba Mini 2
+      context: 256K
+      modality: Text
+      rate_limit: 200 RPM, 10 RPS
+  qwen3-max:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: alibaba_cloud_model_studio
+      model: qwen3-max
+    _meta:
+      name: Qwen3-Max
+      context: 128K
+      modality: Text
+      rate_limit: Tiered by region
+  qwen3-plus:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: alibaba_cloud_model_studio
+      model: qwen3-plus
+    _meta:
+      name: Qwen3-Plus
+      context: 1M
+      modality: Text
+      rate_limit: Tiered by region
+  qwen3-vl-plus:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: alibaba_cloud_model_studio
+      model: qwen3-vl-plus
+    _meta:
+      name: Qwen3-VL-Plus
+      context: 128K
+      modality: Text + Vision
+      rate_limit: Tiered by region
+  qwen3-coder-plus:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: alibaba_cloud_model_studio
+      model: qwen3-coder-plus
+    _meta:
+      name: Qwen3-Coder-Plus
+      context: 256K
+      modality: Text (code)
+      rate_limit: Tiered by region
+  qwq-plus:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: alibaba_cloud_model_studio
+      model: qwq-plus
+    _meta:
+      name: QwQ-Plus
+      context: 131K
+      modality: Text (reasoning)
+      rate_limit: Tiered by region
+  deepseek-chat:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: deepseek
+      model: deepseek-chat
+    _meta:
+      name: deepseek-chat (V3.2)
+      context: 128K
+      modality: Text
+      rate_limit: Dynamic
+  deepseek-reasoner:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: deepseek
+      model: deepseek-reasoner
+    _meta:
+      name: deepseek-reasoner (R1)
+      context: 128K
+      modality: Text (reasoning)
+      rate_limit: Dynamic
+  gemini-2.5-pro:
+    capabilities:
+      supports_tools: true
+      supports_vision: true
+      supports_streaming: true
+    fallbacks:
+    - provider: google_gemini
+      model: gemini-2.5-pro
+    _meta:
+      name: Gemini 2.5 Pro
+      context: 2M
+      modality: Text + Image + Audio + Video
+      rate_limit: 5 RPM, 100 RPD
+  gemini-3-flash-preview:
+    capabilities:
+      supports_tools: true
+      supports_vision: true
+      supports_streaming: true
+    fallbacks:
+    - provider: google_gemini
+      model: gemini-3-flash-preview
+    _meta:
+      name: Gemini 3 Flash (Preview)
+      context: 1M
+      modality: Text + Image + Audio + Video
+      rate_limit: Preview limits
+  qwen-3-32b:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: cerebras
+      model: qwen-3-32b
+    _meta:
+      name: qwen-3-32b
+      context: 131K (8K on free)
+      modality: Text
+      rate_limit: 30 RPM, 14,400 RPD, 1M TPD
+  '@cf/moonshotai/kimi-k2.5':
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: cloudflare
+      model: '@cf/moonshotai/kimi-k2.5'
+    _meta:
+      name: '@cf/moonshotai/kimi-k2.5'
+      context: 256K
+      modality: Text + Vision
+      rate_limit: 10K neurons/day (shared)
+  openai/gpt-5:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: github
+      model: openai/gpt-5
+    _meta:
+      name: gpt-5
+      context: 200K
+      modality: Text
+      rate_limit: 10 RPM, 50 RPD
+  openai/gpt-4.1:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: github
+      model: openai/gpt-4.1
+    _meta:
+      name: gpt-4.1
+      context: 1M
+      modality: Text
+      rate_limit: 10 RPM, 50 RPD
+  openai/gpt-4.1-mini:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: github
+      model: openai/gpt-4.1-mini
+    _meta:
+      name: gpt-4.1-mini
+      context: 1M
+      modality: Text
+      rate_limit: 15 RPM, 150 RPD
+  openai/gpt-4o:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: github
+      model: openai/gpt-4o
+    _meta:
+      name: gpt-4o
+      context: 128K
+      modality: Text + Vision
+      rate_limit: 10 RPM, 50 RPD
+  openai/o4-mini:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: github
+      model: openai/o4-mini
+    _meta:
+      name: o4-mini
+      context: 200K
+      modality: Text (reasoning)
+      rate_limit: 10 RPM, 50 RPD
+  meta/Llama-4-Scout-17B-16E:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: github
+      model: meta/Llama-4-Scout-17B-16E
+    _meta:
+      name: Llama-4-Scout-17B-16E
+      context: 512K
+      modality: Text + Vision
+      rate_limit: 15 RPM, 150 RPD
+  meta/Llama-4-Maverick-17B-128E:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: github
+      model: meta/Llama-4-Maverick-17B-128E
+    _meta:
+      name: Llama-4-Maverick-17B-128E
+      context: 256K
+      modality: Text + Vision
+      rate_limit: 10 RPM, 50 RPD
+  meta/Meta-Llama-3.3-70B:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: github
+      model: meta/Meta-Llama-3.3-70B
+    _meta:
+      name: Meta-Llama-3.3-70B
+      context: 131K
+      modality: Text
+      rate_limit: 15 RPM, 150 RPD
+  deepseek/DeepSeek-R1:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: github
+      model: deepseek/DeepSeek-R1
+    _meta:
+      name: DeepSeek-R1
+      context: 64K
+      modality: Text (reasoning)
+      rate_limit: 15 RPM, 150 RPD
+  mistralai/Mistral-Small-3.1:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: github
+      model: mistralai/Mistral-Small-3.1
+    _meta:
+      name: Mistral-Small-3.1
+      context: 128K
+      modality: Text + Vision
+      rate_limit: 15 RPM, 150 RPD
+  x-ai/grok-code-fast-1:free:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: kilo_code
+      model: x-ai/grok-code-fast-1:free
+    _meta:
+      name: x-ai/grok-code-fast-1:free
+      context: 256K
+      modality: Text (code)
+      rate_limit: ~200 req/hr
+  meta-llama/Meta-Llama-3.3-70B-Instruct:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: nebius
+      model: meta-llama/Meta-Llama-3.3-70B-Instruct
+    _meta:
+      name: Meta-Llama-3.3-70B-Instruct
+      context: 128K
+      modality: Text
+      rate_limit: Tier-based
+  deepseek-ai/DeepSeek-V3-0324:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: nebius
+      model: deepseek-ai/DeepSeek-V3-0324
+    _meta:
+      name: DeepSeek-V3-0324
+      context: 128K
+      modality: Text
+      rate_limit: Tier-based
+  deepseek-ai/DeepSeek-R1:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: nebius
+      model: deepseek-ai/DeepSeek-R1
+    _meta:
+      name: DeepSeek-R1
+      context: 128K
+      modality: Text (reasoning)
+      rate_limit: Tier-based
+  Qwen/Qwen3-235B-A22B:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: nebius
+      model: Qwen/Qwen3-235B-A22B
+    _meta:
+      name: Qwen3-235B-A22B
+      context: 128K
+      modality: Text
+      rate_limit: Tier-based
+  openai/gpt-oss-120b:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: nebius
+      model: openai/gpt-oss-120b
+    - provider: nscale
+      model: openai/gpt-oss-120b
+    _meta:
+      name: gpt-oss-120b
+      context: 128K
+      modality: Text
+      rate_limit: Tier-based
+  meta-llama/Llama-3.3-70B-Instruct:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: nscale
+      model: meta-llama/Llama-3.3-70B-Instruct
+    _meta:
+      name: Llama-3.3-70B-Instruct
+      context: 128K
+      modality: Text
+      rate_limit: Fair-use
+  Qwen/Qwen3-Coder-30B-A3B-Instruct:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: nscale
+      model: Qwen/Qwen3-Coder-30B-A3B-Instruct
+    _meta:
+      name: Qwen3-Coder-30B-A3B-Instruct
+      context: 256K
+      modality: Text (code)
+      rate_limit: Fair-use
+  deepseek-ai/DeepSeek-R1-Distill-Llama-70B:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: nscale
+      model: deepseek-ai/DeepSeek-R1-Distill-Llama-70B
+    _meta:
+      name: DeepSeek-R1-Distill-Llama-70B
+      context: 128K
+      modality: Text (reasoning)
+      rate_limit: Fair-use
+  Qwen/Qwen3-32B:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: nscale
+      model: Qwen/Qwen3-32B
+    _meta:
+      name: Qwen3-32B
+      context: 128K
+      modality: Text
+      rate_limit: Fair-use
+  gpt-oss:120b-cloud:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: ollama
+      model: gpt-oss:120b-cloud
+    _meta:
+      name: gpt-oss:120b-cloud
+      context: 128K
+      modality: Text
+      rate_limit: Session/weekly limits (unpublished)
+  deepseek-v3.1:671b-cloud:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: ollama
+      model: deepseek-v3.1:671b-cloud
+    _meta:
+      name: deepseek-v3.1:671b-cloud
+      context: 128K
+      modality: Text
+      rate_limit: Session/weekly limits (unpublished)
+  qwen3-coder:480b-cloud:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: ollama
+      model: qwen3-coder:480b-cloud
+    _meta:
+      name: qwen3-coder:480b-cloud
+      context: 128K
+      modality: Text (code)
+      rate_limit: Session/weekly limits (unpublished)
+  kimi-k2:1t-cloud:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: ollama
+      model: kimi-k2:1t-cloud
+    _meta:
+      name: kimi-k2:1t-cloud
+      context: 262K
+      modality: Text
+      rate_limit: Session/weekly limits (unpublished)
+  glm-4.6:cloud:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: ollama
+      model: glm-4.6:cloud
+    _meta:
+      name: glm-4.6:cloud
+      context: 128K
+      modality: Text
+      rate_limit: Session/weekly limits (unpublished)
+  deepseek/deepseek-chat-v3.1:free:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: openrouter
+      model: deepseek/deepseek-chat-v3.1:free
+    _meta:
+      name: deepseek/deepseek-chat-v3.1:free
+      context: 163K
+      modality: Text
+      rate_limit: 20 RPM, 50 RPD
+  qwen/qwen3-235b-a22b:free:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: openrouter
+      model: qwen/qwen3-235b-a22b:free
+    _meta:
+      name: qwen/qwen3-235b-a22b:free
+      context: 128K
+      modality: Text
+      rate_limit: 20 RPM, 50 RPD
+  aion-2.0:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: aion_labs
+      model: aion-2.0
+    _meta:
+      name: aion-2.0
+      context: 131K
+      modality: Text (roleplay)
+      rate_limit: Daily token allowance
+  aion-1.0:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: aion_labs
+      model: aion-1.0
+    _meta:
+      name: aion-1.0
+      context: 131K
+      modality: Text
+      rate_limit: Daily token allowance
+  aion-1.0-mini:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: aion_labs
+      model: aion-1.0-mini
+    _meta:
+      name: aion-1.0-mini
+      context: 131K
+      modality: Text
+      rate_limit: Daily token allowance
+  grok-4.3:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: xai
+      model: grok-4.3
+    _meta:
+      name: grok-4.3
+      context: 1M
+      modality: Text
+      rate_limit: Credit-based
+  grok-4.1-fast:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: xai
+      model: grok-4.1-fast
+    _meta:
+      name: grok-4.1-fast
+      context: 2M
+      modality: Text
+      rate_limit: Credit-based
+  grok-3-mini:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: xai
+      model: grok-3-mini
+    _meta:
+      name: grok-3-mini
+      context: 131K
+      modality: Text
+      rate_limit: Credit-based
