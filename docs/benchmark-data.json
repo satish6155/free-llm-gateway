@@ -1,0 +1,308 @@
+{
+  "lastUpdated": "2026-05-24",
+  "source": "Artificial Analysis, LMSYS Arena, provider docs, community benchmarks",
+  "providers": [
+    {
+      "id": "cerebras",
+      "name": "Cerebras",
+      "website": "https://cerebras.ai",
+      "description": "Wafer-scale CS-3 chip inference — fastest in the world",
+      "speedTier": 1,
+      "speedRange": "400-2000",
+      "ttftRange": "10-50",
+      "free": true,
+      "models": [
+        {"id": "llama-3.3-70b", "name": "Llama 3.3 70B", "family": "Llama", "params": "70B", "contextWindow": 131072, "speed": 500, "ttft": 35, "free": true, "arena": 1200, "mmlu": 82.0, "coding": 73.0, "math": 58.0},
+        {"id": "llama3.1-8b", "name": "Llama 3.1 8B", "family": "Llama", "params": "8B", "contextWindow": 131072, "speed": 1800, "ttft": 15, "free": true, "arena": 1050, "mmlu": 68.4, "coding": 55.0, "math": 38.0},
+        {"id": "qwen-3-32b", "name": "Qwen 3 32B", "family": "Qwen", "params": "32B", "contextWindow": 131072, "speed": 450, "ttft": 30, "free": true, "arena": 1260, "mmlu": 85.0, "coding": 78.0, "math": 72.0},
+        {"id": "qwen-3-235b", "name": "Qwen 3 235B (MoE)", "family": "Qwen", "params": "235B", "contextWindow": 131072, "speed": 400, "ttft": 45, "free": true, "arena": 1340, "mmlu": 89.0, "coding": 84.0, "math": 80.0},
+        {"id": "gpt-oss-120b", "name": "GPT-OSS 120B", "family": "GPT-OSS", "params": "120B", "contextWindow": 32768, "speed": 420, "ttft": 40, "free": true},
+        {"id": "zai-glm-4.7", "name": "ZAI GLM 4.7", "family": "GLM", "params": "—", "contextWindow": 32768, "speed": 440, "ttft": 38, "free": true},
+        {"id": "llama-4-scout", "name": "Llama 4 Scout 17Bx16E", "family": "Llama", "params": "109B MoE", "contextWindow": 1048576, "speed": 600, "ttft": 25, "free": true, "arena": 1220, "mmlu": 80.5, "coding": 72.0, "math": 62.0}
+      ]
+    },
+    {
+      "id": "groq",
+      "name": "Groq",
+      "website": "https://groq.com",
+      "description": "LPU-based ultra-fast inference — #1-2 for speed globally",
+      "speedTier": 1,
+      "speedRange": "250-800",
+      "ttftRange": "30-80",
+      "free": true,
+      "models": [
+        {"id": "llama-3.3-70b-versatile", "name": "Llama 3.3 70B Versatile", "family": "Llama", "params": "70B", "contextWindow": 131072, "speed": 300, "ttft": 60, "free": true, "arena": 1200, "mmlu": 82.0, "coding": 73.0, "math": 58.0},
+        {"id": "llama-3.1-8b-instant", "name": "Llama 3.1 8B Instant", "family": "Llama", "params": "8B", "contextWindow": 131072, "speed": 700, "ttft": 35, "free": true, "arena": 1050, "mmlu": 68.4, "coding": 55.0, "math": 38.0},
+        {"id": "llama-4-scout-17b-16e-instruct", "name": "Llama 4 Scout 17Bx16E", "family": "Llama", "params": "109B MoE", "contextWindow": 1048576, "speed": 250, "ttft": 70, "free": true, "arena": 1220, "mmlu": 80.5, "coding": 72.0, "math": 62.0},
+        {"id": "qwen3-32b", "name": "Qwen 3 32B", "family": "Qwen", "params": "32B", "contextWindow": 131072, "speed": 280, "ttft": 65, "free": true, "arena": 1260, "mmlu": 85.0, "coding": 78.0, "math": 72.0},
+        {"id": "deepseek-r1-distill-70b", "name": "DeepSeek R1 Distill 70B", "family": "DeepSeek", "params": "70B", "contextWindow": 131072, "speed": 260, "ttft": 65, "free": true, "arena": 1280, "mmlu": 84.0, "coding": 76.0, "math": 75.0},
+        {"id": "kimi-k2-instruct", "name": "Kimi K2", "family": "Moonshot", "params": "—", "contextWindow": 131072, "speed": 270, "ttft": 60, "free": true, "arena": 1300, "mmlu": 86.0, "coding": 80.0, "math": 74.0}
+      ]
+    },
+    {
+      "id": "google",
+      "name": "Google Gemini",
+      "website": "https://ai.google.dev",
+      "description": "Google TPU infrastructure — competitive speed with large context",
+      "speedTier": 2,
+      "speedRange": "40-150",
+      "ttftRange": "100-500",
+      "free": true,
+      "models": [
+        {"id": "gemini-2.5-flash", "name": "Gemini 2.5 Flash", "family": "Gemini", "params": "—", "contextWindow": 1048576, "speed": 100, "ttft": 200, "free": true, "arena": 1350, "mmlu": 88.0, "coding": 82.0, "math": 78.0},
+        {"id": "gemini-2.5-flash-lite", "name": "Gemini 2.5 Flash Lite", "family": "Gemini", "params": "—", "contextWindow": 1048576, "speed": 135, "ttft": 150, "free": true, "arena": 1200, "mmlu": 78.0, "coding": 68.0, "math": 60.0},
+        {"id": "gemini-2.5-pro", "name": "Gemini 2.5 Pro", "family": "Gemini", "params": "—", "contextWindow": 1048576, "speed": 50, "ttft": 400, "free": true, "arena": 1400, "mmlu": 91.0, "coding": 86.0, "math": 84.0},
+        {"id": "gemini-3-flash-preview", "name": "Gemini 3 Flash Preview", "family": "Gemini", "params": "—", "contextWindow": 1048576, "speed": 120, "ttft": 180, "free": true, "arena": 1380, "mmlu": 90.0, "coding": 84.0, "math": 82.0}
+      ]
+    },
+    {
+      "id": "mistral",
+      "name": "Mistral API",
+      "website": "https://mistral.ai",
+      "description": "European AI lab — competitive speeds, strong open models",
+      "speedTier": 2,
+      "speedRange": "40-130",
+      "ttftRange": "150-400",
+      "free": true,
+      "models": [
+        {"id": "mistral-small-3.1-24b", "name": "Mistral Small 3.1 24B", "family": "Mistral", "params": "24B", "contextWindow": 131072, "speed": 100, "ttft": 180, "free": true, "arena": 1180, "mmlu": 76.0, "coding": 70.0, "math": 55.0},
+        {"id": "mistral-medium-2505", "name": "Mistral Medium 2505", "family": "Mistral", "params": "—", "contextWindow": 131072, "speed": 60, "ttft": 250, "free": false, "arena": 1300, "mmlu": 85.0, "coding": 78.0, "math": 70.0},
+        {"id": "mistral-large", "name": "Mistral Large", "family": "Mistral", "params": "123B", "contextWindow": 131072, "speed": 50, "ttft": 350, "free": false, "arena": 1280, "mmlu": 84.0, "coding": 76.0, "math": 66.0},
+        {"id": "codestral-2501", "name": "Codestral 25.01", "family": "Mistral", "params": "22B", "contextWindow": 262144, "speed": 70, "ttft": 200, "free": true, "arena": 1150, "mmlu": 70.0, "coding": 82.0, "math": 48.0},
+        {"id": "open-mistral-nemo", "name": "Mistral Nemo 12B", "family": "Mistral", "params": "12B", "contextWindow": 131072, "speed": 115, "ttft": 170, "free": true, "arena": 1080, "mmlu": 68.0, "coding": 58.0, "math": 40.0}
+      ]
+    },
+    {
+      "id": "nvidia",
+      "name": "NVIDIA NIM",
+      "website": "https://build.nvidia.com",
+      "description": "NVIDIA GPU cloud (H100/A100) — strong for large models",
+      "speedTier": 2,
+      "speedRange": "30-120",
+      "ttftRange": "200-600",
+      "free": true,
+      "models": [
+        {"id": "meta/llama-3.1-405b-instruct", "name": "Llama 3.1 405B", "family": "Llama", "params": "405B", "contextWindow": 131072, "speed": 33, "ttft": 450, "free": true, "arena": 1280, "mmlu": 87.0, "coding": 78.0, "math": 68.0},
+        {"id": "nvidia/nemotron-3-super-120b-a12b", "name": "Nemotron Super 120B", "family": "Nemotron", "params": "120B MoE", "contextWindow": 32768, "speed": 60, "ttft": 300, "free": true, "arena": 1210, "mmlu": 80.0, "coding": 70.0, "math": 58.0},
+        {"id": "qwen/qwen2.5-72b-instruct", "name": "Qwen 2.5 72B", "family": "Qwen", "params": "72B", "contextWindow": 131072, "speed": 45, "ttft": 350, "free": true, "arena": 1250, "mmlu": 83.0, "coding": 78.0, "math": 72.0},
+        {"id": "meta/Meta-Llama-3.3-70B", "name": "Llama 3.3 70B", "family": "Llama", "params": "70B", "contextWindow": 131072, "speed": 55, "ttft": 300, "free": true, "arena": 1200, "mmlu": 82.0, "coding": 73.0, "math": 58.0},
+        {"id": "mistralai/mistral-large-2-instruct", "name": "Mistral Large 2", "family": "Mistral", "params": "123B", "contextWindow": 131072, "speed": 40, "ttft": 400, "free": true, "arena": 1270, "mmlu": 84.0, "coding": 76.0, "math": 66.0}
+      ]
+    },
+    {
+      "id": "xai",
+      "name": "xAI (Grok)",
+      "website": "https://x.ai",
+      "description": "xAI Memphis supercluster — Grok family models",
+      "speedTier": 2,
+      "speedRange": "40-120",
+      "ttftRange": "150-400",
+      "free": false,
+      "models": [
+        {"id": "grok-3-mini", "name": "Grok 3 Mini", "family": "Grok", "params": "—", "contextWindow": 131072, "speed": 100, "ttft": 200, "free": false, "arena": 1260, "mmlu": 82.0, "coding": 74.0, "math": 70.0},
+        {"id": "grok-4.1-fast", "name": "Grok 4.1 Fast", "family": "Grok", "params": "—", "contextWindow": 262144, "speed": 80, "ttft": 250, "free": false, "arena": 1380, "mmlu": 89.0, "coding": 85.0, "math": 82.0},
+        {"id": "grok-4.3", "name": "Grok 4.3", "family": "Grok", "params": "—", "contextWindow": 262144, "speed": 60, "ttft": 300, "free": false, "arena": 1420, "mmlu": 91.5, "coding": 88.0, "math": 86.0}
+      ]
+    },
+    {
+      "id": "openrouter",
+      "name": "OpenRouter",
+      "website": "https://openrouter.ai",
+      "description": "Aggregator routing to multiple providers — huge model selection",
+      "speedTier": 3,
+      "speedRange": "15-45",
+      "ttftRange": "400-1200",
+      "free": true,
+      "models": [
+        {"id": "meta-llama/llama-3.3-70b-instruct:free", "name": "Llama 3.3 70B", "family": "Llama", "params": "70B", "contextWindow": 131072, "speed": 30, "ttft": 600, "free": true, "arena": 1200, "mmlu": 82.0, "coding": 73.0, "math": 58.0},
+        {"id": "google/gemma-4-31b-it:free", "name": "Gemma 4 31B", "family": "Gemma", "params": "31B", "contextWindow": 131072, "speed": 25, "ttft": 700, "free": true, "arena": 1180, "mmlu": 76.0, "coding": 68.0, "math": 52.0},
+        {"id": "deepseek/deepseek-chat-v3.1:free", "name": "DeepSeek V3.1", "family": "DeepSeek", "params": "671B MoE", "contextWindow": 131072, "speed": 35, "ttft": 500, "free": true, "arena": 1320, "mmlu": 88.0, "coding": 82.0, "math": 78.0},
+        {"id": "qwen/qwen3-235b-a22b:free", "name": "Qwen 3 235B (MoE)", "family": "Qwen", "params": "235B MoE", "contextWindow": 131072, "speed": 28, "ttft": 650, "free": true, "arena": 1340, "mmlu": 89.0, "coding": 84.0, "math": 80.0},
+        {"id": "nvidia/nemotron-3-super-120b-a12b:free", "name": "Nemotron Super 120B", "family": "Nemotron", "params": "120B MoE", "contextWindow": 32768, "speed": 20, "ttft": 800, "free": true, "arena": 1210, "mmlu": 80.0, "coding": 70.0, "math": 58.0}
+      ]
+    },
+    {
+      "id": "github",
+      "name": "GitHub Models",
+      "website": "https://github.com/marketplace/models",
+      "description": "GitHub's model marketplace — Azure-backed, OpenAI + open models",
+      "speedTier": 3,
+      "speedRange": "20-100",
+      "ttftRange": "300-800",
+      "free": true,
+      "models": [
+        {"id": "gpt-4.1", "name": "GPT-4.1", "family": "GPT", "params": "—", "contextWindow": 1048576, "speed": 60, "ttft": 450, "free": true, "arena": 1360, "mmlu": 89.0, "coding": 85.0, "math": 80.0},
+        {"id": "gpt-4o", "name": "GPT-4o", "family": "GPT", "params": "—", "contextWindow": 131072, "speed": 65, "ttft": 400, "free": true, "arena": 1300, "mmlu": 87.0, "coding": 80.0, "math": 76.0},
+        {"id": "gpt-4o-mini", "name": "GPT-4o Mini", "family": "GPT", "params": "—", "contextWindow": 131072, "speed": 80, "ttft": 350, "free": true, "arena": 1180, "mmlu": 78.0, "coding": 72.0, "math": 60.0},
+        {"id": "o3-mini", "name": "O3 Mini", "family": "OpenAI O", "params": "—", "contextWindow": 200000, "speed": 45, "ttft": 500, "free": true, "arena": 1340, "mmlu": 88.0, "coding": 84.0, "math": 82.0},
+        {"id": "o4-mini", "name": "O4 Mini", "family": "OpenAI O", "params": "—", "contextWindow": 200000, "speed": 40, "ttft": 550, "free": true, "arena": 1380, "mmlu": 90.0, "coding": 87.0, "math": 86.0}
+      ]
+    },
+    {
+      "id": "cloudflare",
+      "name": "Cloudflare Workers AI",
+      "website": "https://ai.cloudflare.com",
+      "description": "Edge GPU inference — global CDN network, low latency",
+      "speedTier": 3,
+      "speedRange": "30-80",
+      "ttftRange": "150-500",
+      "free": true,
+      "models": [
+        {"id": "llama-3.3-70b-cf", "name": "Llama 3.3 70B", "family": "Llama", "params": "70B", "contextWindow": 65536, "speed": 40, "ttft": 300, "free": true, "arena": 1200, "mmlu": 82.0, "coding": 73.0, "math": 58.0},
+        {"id": "mistral-small-cf", "name": "Mistral Small", "family": "Mistral", "params": "24B", "contextWindow": 65536, "speed": 50, "ttft": 250, "free": true, "arena": 1180, "mmlu": 76.0, "coding": 70.0, "math": 55.0},
+        {"id": "qwen-qwq-32b-cf", "name": "QwQ 32B", "family": "Qwen", "params": "32B", "contextWindow": 32768, "speed": 30, "ttft": 400, "free": true, "arena": 1250, "mmlu": 82.0, "coding": 75.0, "math": 70.0},
+        {"id": "gemma-4-26b-cf", "name": "Gemma 4 26B", "family": "Gemma", "params": "26B", "contextWindow": 32768, "speed": 55, "ttft": 220, "free": true, "arena": 1150, "mmlu": 74.0, "coding": 65.0, "math": 48.0}
+      ]
+    },
+    {
+      "id": "deepseek",
+      "name": "DeepSeek API",
+      "website": "https://platform.deepseek.com",
+      "description": "Chinese AI lab — world-class reasoning models, competitive pricing",
+      "speedTier": 3,
+      "speedRange": "30-60",
+      "ttftRange": "200-500",
+      "free": false,
+      "models": [
+        {"id": "deepseek-chat", "name": "DeepSeek V3", "family": "DeepSeek", "params": "671B MoE", "contextWindow": 131072, "speed": 50, "ttft": 300, "free": false, "arena": 1320, "mmlu": 88.0, "coding": 82.0, "math": 78.0},
+        {"id": "deepseek-reasoner", "name": "DeepSeek R1", "family": "DeepSeek", "params": "671B MoE", "contextWindow": 131072, "speed": 30, "ttft": 400, "free": false, "arena": 1380, "mmlu": 90.0, "coding": 85.0, "math": 85.0}
+      ]
+    },
+    {
+      "id": "cohere",
+      "name": "Cohere API",
+      "website": "https://cohere.com",
+      "description": "Enterprise-focused — Command family, RAG-optimized",
+      "speedTier": 3,
+      "speedRange": "30-100",
+      "ttftRange": "200-500",
+      "free": true,
+      "models": [
+        {"id": "command-a-03-2025", "name": "Command A", "family": "Command", "params": "111B MoE", "contextWindow": 262144, "speed": 50, "ttft": 300, "free": true, "arena": 1200, "mmlu": 78.0, "coding": 70.0, "math": 55.0},
+        {"id": "command-r-plus-08-2024", "name": "Command R+", "family": "Command", "params": "104B", "contextWindow": 131072, "speed": 35, "ttft": 400, "free": true, "arena": 1150, "mmlu": 75.0, "coding": 65.0, "math": 50.0},
+        {"id": "command-r-08-2024", "name": "Command R", "family": "Command", "params": "35B", "contextWindow": 131072, "speed": 60, "ttft": 250, "free": true, "arena": 1080, "mmlu": 68.0, "coding": 58.0, "math": 40.0},
+        {"id": "command-r7b-12-2024", "name": "Command R7B", "family": "Command", "params": "7B", "contextWindow": 131072, "speed": 90, "ttft": 200, "free": true, "arena": 980, "mmlu": 55.0, "coding": 45.0, "math": 28.0}
+      ]
+    },
+    {
+      "id": "nebius",
+      "name": "Nebius AI",
+      "website": "https://nebius.ai",
+      "description": "NVIDIA GPU cloud (H100/L40) — competitive GPU inference",
+      "speedTier": 3,
+      "speedRange": "40-150",
+      "ttftRange": "150-400",
+      "free": false,
+      "models": [
+        {"id": "llama-3.1-70b-nebius", "name": "Llama 3.1 70B", "family": "Llama", "params": "70B", "contextWindow": 131072, "speed": 75, "ttft": 250, "free": false, "arena": 1200, "mmlu": 82.0, "coding": 73.0, "math": 58.0},
+        {"id": "llama-3.1-8b-nebius", "name": "Llama 3.1 8B", "family": "Llama", "params": "8B", "contextWindow": 131072, "speed": 130, "ttft": 180, "free": false, "arena": 1050, "mmlu": 68.4, "coding": 55.0, "math": 38.0}
+      ]
+    },
+    {
+      "id": "siliconflow",
+      "name": "SiliconFlow",
+      "website": "https://siliconflow.ai",
+      "description": "Chinese GPU cloud — competitive pricing for open models",
+      "speedTier": 3,
+      "speedRange": "40-100",
+      "ttftRange": "150-400",
+      "free": true,
+      "models": [
+        {"id": "deepseek-v3-sf", "name": "DeepSeek V3", "family": "DeepSeek", "params": "671B MoE", "contextWindow": 131072, "speed": 50, "ttft": 300, "free": true, "arena": 1320, "mmlu": 88.0, "coding": 82.0, "math": 78.0},
+        {"id": "qwen-2.5-72b-sf", "name": "Qwen 2.5 72B", "family": "Qwen", "params": "72B", "contextWindow": 131072, "speed": 60, "ttft": 250, "free": true, "arena": 1250, "mmlu": 83.0, "coding": 78.0, "math": 72.0}
+      ]
+    },
+    {
+      "id": "huggingface",
+      "name": "HuggingFace",
+      "website": "https://huggingface.co",
+      "description": "Open model hub — free serverless inference, huge selection",
+      "speedTier": 4,
+      "speedRange": "10-60",
+      "ttftRange": "300-1000",
+      "free": true,
+      "models": [
+        {"id": "meta-llama/Llama-3.3-70B-Instruct", "name": "Llama 3.3 70B", "family": "Llama", "params": "70B", "contextWindow": 131072, "speed": 20, "ttft": 700, "free": true, "arena": 1200, "mmlu": 82.0, "coding": 73.0, "math": 58.0},
+        {"id": "mistralai/Mistral-Small-3.1", "name": "Mistral Small 3.1", "family": "Mistral", "params": "24B", "contextWindow": 131072, "speed": 30, "ttft": 600, "free": true, "arena": 1180, "mmlu": 76.0, "coding": 70.0, "math": 55.0},
+        {"id": "qwen-qwen3-coder-480b", "name": "Qwen3 Coder 480B (MoE)", "family": "Qwen", "params": "480B MoE", "contextWindow": 262144, "speed": 15, "ttft": 800, "free": true, "arena": 1360, "mmlu": 90.0, "coding": 90.0, "math": 82.0}
+      ]
+    },
+    {
+      "id": "alibaba",
+      "name": "Alibaba Cloud (Qwen)",
+      "website": "https://dashscope.aliyun.com",
+      "description": "Qwen model family — strong multilingual, large context",
+      "speedTier": 3,
+      "speedRange": "30-80",
+      "ttftRange": "200-500",
+      "free": true,
+      "models": [
+        {"id": "qwen3-max", "name": "Qwen3 Max", "family": "Qwen", "params": "—", "contextWindow": 131072, "speed": 50, "ttft": 300, "free": true, "arena": 1330, "mmlu": 89.0, "coding": 83.0, "math": 80.0},
+        {"id": "qwen3-plus", "name": "Qwen3 Plus", "family": "Qwen", "params": "—", "contextWindow": 131072, "speed": 65, "ttft": 250, "free": true, "arena": 1280, "mmlu": 85.0, "coding": 78.0, "math": 72.0},
+        {"id": "qwen3-coder-plus", "name": "Qwen3 Coder Plus", "family": "Qwen", "params": "—", "contextWindow": 262144, "speed": 55, "ttft": 280, "free": true, "arena": 1340, "mmlu": 88.0, "coding": 88.0, "math": 76.0},
+        {"id": "qwq-plus", "name": "QwQ Plus (Reasoning)", "family": "Qwen", "params": "—", "contextWindow": 131072, "speed": 35, "ttft": 400, "free": true, "arena": 1300, "mmlu": 86.0, "coding": 80.0, "math": 82.0}
+      ]
+    },
+    {
+      "id": "zhipu",
+      "name": "Zhipu AI (GLM)",
+      "website": "https://bigmodel.cn",
+      "description": "Chinese AI lab — GLM model family, strong Chinese/English",
+      "speedTier": 3,
+      "speedRange": "30-60",
+      "ttftRange": "200-500",
+      "free": true,
+      "models": [
+        {"id": "glm-4.7-flash", "name": "GLM 4.7 Flash", "family": "GLM", "params": "—", "contextWindow": 131072, "speed": 55, "ttft": 250, "free": true, "arena": 1200, "mmlu": 78.0, "coding": 72.0, "math": 58.0},
+        {"id": "glm-4.5-air", "name": "GLM 4.5 Air", "family": "GLM", "params": "—", "contextWindow": 131072, "speed": 60, "ttft": 220, "free": true, "arena": 1150, "mmlu": 75.0, "coding": 68.0, "math": 52.0}
+      ]
+    },
+    {
+      "id": "ai21",
+      "name": "AI21 Labs",
+      "website": "https://ai21.com",
+      "description": "Mamba/Transformer hybrid — Jamba family",
+      "speedTier": 2,
+      "speedRange": "30-120",
+      "ttftRange": "200-500",
+      "free": false,
+      "models": [
+        {"id": "jamba-mini", "name": "Jamba 1.5 Mini", "family": "Jamba", "params": "12B MoE", "contextWindow": 262144, "speed": 100, "ttft": 220, "free": false, "arena": 1100, "mmlu": 70.0, "coding": 60.0, "math": 42.0},
+        {"id": "jamba-large", "name": "Jamba 1.5 Large", "family": "Jamba", "params": "398B MoE", "contextWindow": 262144, "speed": 40, "ttft": 350, "free": false, "arena": 1260, "mmlu": 83.0, "coding": 76.0, "math": 62.0}
+      ]
+    },
+    {
+      "id": "ovhcloud",
+      "name": "OVHcloud AI",
+      "website": "https://endpoints.ai.ovh.net",
+      "description": "European GPU cloud — GDPR-friendly inference",
+      "speedTier": 4,
+      "speedRange": "20-60",
+      "ttftRange": "300-700",
+      "free": false,
+      "models": [
+        {"id": "llama-3.1-8b-ovh", "name": "Llama 3.1 8B", "family": "Llama", "params": "8B", "contextWindow": 32768, "speed": 50, "ttft": 400, "free": false, "arena": 1050, "mmlu": 68.4, "coding": 55.0, "math": 38.0},
+        {"id": "mistral-7b-ovh", "name": "Mistral 7B v0.3", "family": "Mistral", "params": "7B", "contextWindow": 32768, "speed": 55, "ttft": 350, "free": false, "arena": 980, "mmlu": 60.0, "coding": 45.0, "math": 30.0}
+      ]
+    },
+    {
+      "id": "minimax",
+      "name": "MiniMax",
+      "website": "https://minimaxi.com",
+      "description": "Chinese AI — MiniMax models, competitive quality",
+      "speedTier": 3,
+      "speedRange": "30-80",
+      "ttftRange": "200-500",
+      "free": true,
+      "models": [
+        {"id": "minimax-m2.5", "name": "MiniMax M2.5", "family": "MiniMax", "params": "—", "contextWindow": 1048576, "speed": 50, "ttft": 300, "free": true, "arena": 1240, "mmlu": 82.0, "coding": 75.0, "math": 65.0}
+      ]
+    }
+  ],
+  "speedTiers": {
+    "1": {"label": "Ultra-fast", "color": "#10b981", "range": "400+ tok/s", "providers": ["Cerebras", "Groq"]},
+    "2": {"label": "Fast", "color": "#3b82f6", "range": "80-200 tok/s", "providers": ["Google Gemini", "Mistral", "NVIDIA NIM", "xAI", "AI21"]},
+    "3": {"label": "Moderate", "color": "#f59e0b", "range": "30-100 tok/s", "providers": ["Cloudflare", "GitHub Models", "OpenRouter", "Nebius", "Cohere", "DeepSeek", "SiliconFlow", "Alibaba", "Zhipu", "MiniMax"]},
+    "4": {"label": "Variable", "color": "#ef4444", "range": "10-60 tok/s", "providers": ["HuggingFace", "OVHcloud", "LLM7", "Aion Labs"]}
+  }
+}

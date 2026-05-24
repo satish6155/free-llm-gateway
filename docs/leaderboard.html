@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Free LLM Gateway — Benchmark Leaderboard</title>
+<meta name="description" content="Interactive benchmark leaderboard comparing speed, quality, and features across 20+ free LLM providers.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+<style>
+  :root {
+    --bg-primary: #0a0a0f;
+    --bg-secondary: #12121a;
+    --bg-tertiary: #1a1a28;
+    --bg-card: #15151f;
+    --border: #2a2a3a;
+    --text-primary: #e8e8f0;
+    --text-secondary: #9898b0;
+    --text-muted: #686880;
+    --accent: #6366f1;
+    --accent-glow: rgba(99, 102, 241, 0.3);
+    --green: #10b981;
+    --blue: #3b82f6;
+    --yellow: #f59e0b;
+    --red: #ef4444;
+    --purple: #a855f7;
+    --cyan: #06b6d4;
+    --tier1: #10b981;
+    --tier2: #3b82f6;
+    --tier3: #f59e0b;
+    --tier4: #ef4444;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Ambient gradient background */
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background:
+      radial-gradient(ellipse at 20% 0%, rgba(99,102,241,0.08) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 100%, rgba(6,182,212,0.06) 0%, transparent 50%),
+      radial-gradient(ellipse at 50% 50%, rgba(168,85,247,0.04) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 24px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Header */
+  header {
+    padding: 48px 0 32px;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .logo-icon {
+    font-size: 48px;
+    line-height: 1;
+  }
+
+  .logo-text {
+    font-size: 32px;
+    font-weight: 800;
+    background: linear-gradient(135deg, #6366f1, #06b6d4, #a855f7);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: -0.5px;
+  }
+
+  .subtitle {
+    color: var(--text-secondary);
+    font-size: 18px;
+    max-width: 640px;
+    margin: 0 auto 24px;
+    line-height: 1.5;
+  }
+
+  .header-badges {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    border: 1px solid var(--border);
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    transition: all 0.2s;
+  }
+
+  .badge:hover { border-color: var(--accent); color: var(--text-primary); }
+  .badge .num { color: var(--accent); }
+
+  /* Stats bar */
+  .stats-bar {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    padding: 32px 0;
+  }
+
+  .stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    transition: all 0.3s;
+  }
+
+  .stat-card:hover {
+    border-color: var(--accent);
+    box-shadow: 0 0 20px var(--accent-glow);
+    transform: translateY(-2px);
+  }
+
+  .stat-value {
+    font-size: 28px;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--accent), var(--cyan));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .stat-label {
+    color: var(--text-muted);
+    font-size: 13px;
+    margin-top: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  /* Speed tiers */
+  .speed-tiers {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    padding: 24px 0;
+  }
+
+  .tier-card {
+    border-radius: 10px;
+    padding: 16px;
+    border: 1px solid;
+    text-align: center;
+    transition: all 0.3s;
+    cursor: default;
+  }
+
+  .tier-card:hover { transform: translateY(-2px); }
+  .tier-card.t1 { border-color: rgba(16,185,129,0.3); background: rgba(16,185,129,0.06); }
+  .tier-card.t2 { border-color: rgba(59,130,246,0.3); background: rgba(59,130,246,0.06); }
+  .tier-card.t3 { border-color: rgba(245,158,11,0.3); background: rgba(245,158,11,0.06); }
+  .tier-card.t4 { border-color: rgba(239,68,68,0.3); background: rgba(239,68,68,0.06); }
+
+  .tier-label { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+  .tier-card.t1 .tier-label { color: var(--tier1); }
+  .tier-card.t2 .tier-label { color: var(--tier2); }
+  .tier-card.t3 .tier-label { color: var(--tier3); }
+  .tier-card.t4 .tier-label { color: var(--tier4); }
+
+  .tier-range { color: var(--text-secondary); font-size: 12px; }
+  .tier-providers { color: var(--text-muted); font-size: 11px; margin-top: 6px; line-height: 1.4; }
+
+  /* Controls */
+  .controls {
+    display: flex;
+    gap: 12px;
+    padding: 24px 0 16px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .search-box {
+    flex: 1;
+    min-width: 240px;
+    position: relative;
+  }
+
+  .search-box input {
+    width: 100%;
+    padding: 12px 16px 12px 44px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .search-box input:focus { border-color: var(--accent); }
+  .search-box input::placeholder { color: var(--text-muted); }
+
+  .search-box .search-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    font-size: 16px;
+  }
+
+  .filter-group {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .filter-btn {
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .filter-btn:hover { border-color: var(--accent); color: var(--text-primary); }
+  .filter-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  .tier-filter {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .tier-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  .tier-dot.t1 { background: var(--tier1); }
+  .tier-dot.t2 { background: var(--tier2); }
+  .tier-dot.t3 { background: var(--tier3); }
+  .tier-dot.t4 { background: var(--tier4); }
+
+  .view-toggle {
+    display: flex;
+    gap: 4px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 3px;
+  }
+
+  .view-btn {
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .view-btn.active { background: var(--accent); color: #fff; }
+  .view-btn:hover:not(.active) { color: var(--text-primary); }
+
+  /* Results count */
+  .results-info {
+    color: var(--text-muted);
+    font-size: 13px;
+    padding: 8px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .results-info span { color: var(--accent); font-weight: 600; }
+
+  /* Table view */
+  .table-container {
+    overflow-x: auto;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+
+  thead {
+    background: var(--bg-tertiary);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  th {
+    padding: 14px 16px;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    transition: color 0.2s;
+  }
+
+  th:hover { color: var(--accent); }
+  th.sorted { color: var(--accent); }
+  th .sort-arrow { margin-left: 4px; font-size: 10px; }
+
+  td {
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(42,42,58,0.5);
+    white-space: nowrap;
+  }
+
+  tr { transition: background 0.15s; }
+  tr:hover { background: rgba(99,102,241,0.04); }
+
+  .model-name {
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .provider-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+  }
+
+  .free-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+  }
+
+  .free-badge.yes {
+    background: rgba(16,185,129,0.12);
+    color: var(--green);
+    border: 1px solid rgba(16,185,129,0.25);
+  }
+
+  .free-badge.no {
+    background: rgba(239,68,68,0.08);
+    color: #888;
+    border: 1px solid rgba(239,68,68,0.15);
+  }
+
+  .speed-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 140px;
+  }
+
+  .speed-bar-track {
+    flex: 1;
+    height: 6px;
+    background: var(--bg-tertiary);
+    border-radius: 3px;
+    overflow: hidden;
+    min-width: 60px;
+  }
+
+  .speed-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.4s ease;
+  }
+
+  .speed-val {
+    font-weight: 700;
+    font-size: 13px;
+    min-width: 40px;
+    text-align: right;
+  }
+
+  .score-cell {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .score-top { color: var(--green); font-weight: 700; }
+  .score-high { color: var(--cyan); }
+  .score-mid { color: var(--text-secondary); }
+  .score-low { color: var(--text-muted); }
+  .score-na { color: var(--text-muted); font-style: italic; }
+
+  .context-val {
+    font-size: 12px;
+  }
+
+  .tier-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  /* Card view */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 16px;
+    padding: 16px 0 48px;
+  }
+
+  .model-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    transition: all 0.3s;
+    cursor: default;
+  }
+
+  .model-card:hover {
+    border-color: var(--accent);
+    box-shadow: 0 4px 24px rgba(99,102,241,0.1);
+    transform: translateY(-2px);
+  }
+
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+  }
+
+  .card-model-name {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+
+  .card-provider {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+  }
+
+  .card-badges {
+    display: flex;
+    gap: 6px;
+  }
+
+  .card-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  .card-stat {
+    text-align: center;
+  }
+
+  .card-stat-value {
+    font-size: 18px;
+    font-weight: 700;
+  }
+
+  .card-stat-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+
+  .card-speed-bar {
+    margin-top: 12px;
+  }
+
+  .card-speed-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+  }
+
+  .card-speed-track {
+    height: 8px;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .card-speed-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.6s ease;
+  }
+
+  /* Footer */
+  footer {
+    text-align: center;
+    padding: 48px 0;
+    color: var(--text-muted);
+    font-size: 13px;
+    border-top: 1px solid var(--border);
+    margin-top: 32px;
+  }
+
+  footer a {
+    color: var(--accent);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+
+  footer a:hover { color: var(--cyan); }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    header { padding: 32px 0 24px; }
+    .logo-text { font-size: 24px; }
+    .subtitle { font-size: 15px; }
+    .speed-tiers { grid-template-columns: repeat(2, 1fr); }
+    .controls { flex-direction: column; }
+    .search-box { min-width: 100%; }
+    .card-grid { grid-template-columns: 1fr; }
+    th, td { padding: 10px 10px; font-size: 12px; }
+    .stat-card { padding: 14px; }
+    .stat-value { font-size: 22px; }
+  }
+
+  /* Animations */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .fade-in { animation: fadeIn 0.4s ease forwards; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: var(--bg-primary); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+  /* No results */
+  .no-results {
+    text-align: center;
+    padding: 64px 24px;
+    color: var(--text-muted);
+  }
+
+  .no-results .emoji { font-size: 48px; margin-bottom: 16px; }
+  .no-results .msg { font-size: 16px; }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <div class="logo">
+      <span class="logo-icon">⚡</span>
+      <span class="logo-text">Free LLM Gateway</span>
+    </div>
+    <p class="subtitle">Interactive benchmark leaderboard — compare speed, quality, and features across 20+ free LLM providers and 80+ models</p>
+    <div class="header-badges">
+      <div class="badge">🚀 <span class="num" id="providerCount">20+</span> Providers</div>
+      <div class="badge">🧠 <span class="num" id="modelCount">80+</span> Models</div>
+      <div class="badge">💸 <span class="num" id="freeCount">60+</span> Free Tier</div>
+      <div class="badge">⚡ Up to <span class="num">2,000</span> tok/s</div>
+    </div>
+  </header>
+
+  <!-- Stats -->
+  <div class="stats-bar" id="statsBar"></div>
+
+  <!-- Speed Tiers -->
+  <div class="speed-tiers" id="speedTiers"></div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <div class="search-box">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="searchInput" placeholder="Search models, providers, families...">
+    </div>
+    <div class="tier-filter">
+      <div class="filter-btn active" data-tier="all" onclick="filterTier('all', this)">All Tiers</div>
+      <div class="filter-btn" data-tier="1" onclick="filterTier('1', this)"><span class="tier-dot t1"></span> Ultra-fast</div>
+      <div class="filter-btn" data-tier="2" onclick="filterTier('2', this)"><span class="tier-dot t2"></span> Fast</div>
+      <div class="filter-btn" data-tier="3" onclick="filterTier('3', this)"><span class="tier-dot t3"></span> Moderate</div>
+      <div class="filter-btn" data-tier="4" onclick="filterTier('4', this)"><span class="tier-dot t4"></span> Variable</div>
+    </div>
+    <div class="filter-group">
+      <div class="filter-btn active" data-free="all" onclick="filterFree('all', this)">All</div>
+      <div class="filter-btn" data-free="yes" onclick="filterFree('yes', this)">✓ Free Only</div>
+    </div>
+    <div class="view-toggle">
+      <button class="view-btn active" onclick="setView('table', this)">📊 Table</button>
+      <button class="view-btn" onclick="setView('cards', this)">🃏 Cards</button>
+    </div>
+  </div>
+
+  <div class="results-info">
+    <div>Showing <span id="resultCount">0</span> models</div>
+    <div style="color:var(--text-muted);font-size:11px">Click column headers to sort</div>
+  </div>
+
+  <!-- Table View -->
+  <div id="tableView">
+    <div class="table-container">
+      <table id="leaderboard">
+        <thead>
+          <tr>
+            <th onclick="sortBy('provider')" data-col="provider">Provider <span class="sort-arrow"></span></th>
+            <th onclick="sortBy('model')" data-col="model">Model <span class="sort-arrow"></span></th>
+            <th onclick="sortBy('family')" data-col="family">Family <span class="sort-arrow"></span></th>
+            <th onclick="sortBy('params')" data-col="params">Params <span class="sort-arrow"></span></th>
+            <th onclick="sortBy('speed')" data-col="speed">Speed (tok/s) <span class="sort-arrow"></span></th>
+            <th onclick="sortBy('ttft')" data-col="ttft">TTFT (ms) <span class="sort-arrow"></span></th>
+            <th onclick="sortBy('arena')" data-col="arena">Arena ELO <span class="sort-arrow"></span></th>
+            <th onclick="sortBy('mmlu')" data-col="mmlu">MMLU <span class="sort-arrow"></span></th>
+            <th onclick="sortBy('coding')" data-col="coding">Coding <span class="sort-arrow"></span></th>
+            <th onclick="sortBy('math')" data-col="math">Math <span class="sort-arrow"></span></th>
+            <th onclick="sortBy('context')" data-col="context">Context <span class="sort-arrow"></span></th>
+            <th onclick="sortBy('free')" data-col="free">Free <span class="sort-arrow"></span></th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Card View -->
+  <div id="cardView" style="display:none">
+    <div class="card-grid" id="cardGrid"></div>
+  </div>
+
+  <footer>
+    <p>⚡ <a href="https://github.com/MrFadiAi/free-llm-gateway">Free LLM Gateway</a> — Open-source unified API for 14+ free LLM providers</p>
+    <p style="margin-top:8px">Benchmark data from <a href="https://artificialanalysis.ai">Artificial Analysis</a>, <a href="https://lmarena.ai">LMSYS Arena</a>, provider docs & community benchmarks</p>
+    <p style="margin-top:8px;font-size:11px;color:var(--text-muted)">Speeds are approximate and vary by model size, load, region, and API tier. Updated May 2026.</p>
+  </footer>
+</div>
+
+<script>
+let DATA = null;
+let flatModels = [];
+let filtered = [];
+let currentSort = { col: 'speed', dir: 'desc' };
+let currentTier = 'all';
+let currentFree = 'all';
+let currentView = 'table';
+
+// Load data
+fetch('benchmark-data.json')
+  .then(r => r.json())
+  .then(data => {
+    DATA = data;
+    init();
+  })
+  .catch(err => {
+    console.error('Failed to load data:', err);
+    document.getElementById('tableBody').innerHTML = '<tr><td colspan="12" style="text-align:center;padding:32px;color:var(--text-muted)">Failed to load benchmark data. Make sure benchmark-data.json is in the same directory.</td></tr>';
+  });
+
+function init() {
+  // Flatten models
+  DATA.providers.forEach(p => {
+    p.models.forEach(m => {
+      flatModels.push({
+        provider: p.name,
+        providerId: p.id,
+        providerDesc: p.description,
+        speedTier: p.speedTier,
+        speedRange: p.speedRange,
+        providerFree: p.free,
+        ...m
+      });
+    });
+  });
+
+  // Update header counts
+  const providers = new Set(flatModels.map(m => m.provider));
+  const freeModels = flatModels.filter(m => m.free);
+  document.getElementById('providerCount').textContent = providers.size;
+  document.getElementById('modelCount').textContent = flatModels.length;
+  document.getElementById('freeCount').textContent = freeModels.length;
+
+  renderStats();
+  renderSpeedTiers();
+  applyFilters();
+}
+
+function renderStats() {
+  const stats = [
+    { label: 'Providers', value: new Set(flatModels.map(m => m.provider)).size, icon: '🚀' },
+    { label: 'Models', value: flatModels.length, icon: '🧠' },
+    { label: 'Free Models', value: flatModels.filter(m => m.free).length, icon: '💸' },
+    { label: 'Fastest Speed', value: '2,000 tok/s', icon: '⚡' },
+    { label: 'Max Context', value: '1M tokens', icon: '📏' },
+  ];
+
+  document.getElementById('statsBar').innerHTML = stats.map(s => `
+    <div class="stat-card">
+      <div class="stat-value">${s.value}</div>
+      <div class="stat-label">${s.icon} ${s.label}</div>
+    </div>
+  `).join('');
+}
+
+function renderSpeedTiers() {
+  const tiers = DATA.speedTiers;
+  const html = Object.entries(tiers).map(([id, t]) => `
+    <div class="tier-card t${id}">
+      <div class="tier-label">${t.label}</div>
+      <div class="tier-range">${t.range}</div>
+      <div class="tier-providers">${t.providers.join(' · ')}</div>
+    </div>
+  `).join('');
+  document.getElementById('speedTiers').innerHTML = html;
+}
+
+function applyFilters() {
+  const search = document.getElementById('searchInput').value.toLowerCase();
+
+  filtered = flatModels.filter(m => {
+    if (currentTier !== 'all' && m.speedTier != currentTier) return false;
+    if (currentFree === 'yes' && !m.free) return false;
+    if (search) {
+      const hay = `${m.provider} ${m.name} ${m.id} ${m.family} ${m.params}`.toLowerCase();
+      if (!hay.includes(search)) return false;
+    }
+    return true;
+  });
+
+  sortModels();
+  render();
+}
+
+function sortModels() {
+  const { col, dir } = currentSort;
+  const asc = dir === 'asc' ? 1 : -1;
+
+  filtered.sort((a, b) => {
+    let va = a[col], vb = b[col];
+    if (col === 'free') { va = va ? 1 : 0; vb = vb ? 1 : 0; }
+    if (col === 'params') {
+      va = parseParams(va); vb = parseParams(vb);
+    }
+    if (typeof va === 'string') return va.localeCompare(vb) * asc;
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    return (va - vb) * asc;
+  });
+}
+
+function parseParams(p) {
+  if (!p || p === '—') return 0;
+  const match = p.match(/([\d.]+)\s*(B|M)/i);
+  if (!match) return 0;
+  const num = parseFloat(match[1]);
+  return match[2].toUpperCase() === 'T' ? num * 1000 : num;
+}
+
+function formatContext(ctx) {
+  if (!ctx) return '—';
+  if (ctx >= 1048576) return '1M';
+  if (ctx >= 262144) return '256K';
+  if (ctx >= 131072) return '128K';
+  if (ctx >= 65536) return '64K';
+  if (ctx >= 32768) return '32K';
+  return (ctx / 1024).toFixed(0) + 'K';
+}
+
+function getSpeedColor(speed) {
+  if (speed >= 400) return 'var(--tier1)';
+  if (speed >= 80) return 'var(--tier2)';
+  if (speed >= 30) return 'var(--tier3)';
+  return 'var(--tier4)';
+}
+
+function getSpeedPercent(speed) {
+  return Math.min(100, (speed / 500) * 100);
+}
+
+function scoreClass(val, top, mid) {
+  if (val == null) return 'score-na';
+  if (val >= top) return 'score-top';
+  if (val >= mid) return 'score-high';
+  return 'score-mid';
+}
+
+function render() {
+  document.getElementById('resultCount').textContent = filtered.length;
+  if (currentView === 'table') renderTable();
+  else renderCards();
+  updateSortHeaders();
+}
+
+function renderTable() {
+  const maxSpeed = Math.max(...filtered.map(m => m.speed || 0));
+  const topArena = Math.max(...filtered.map(m => m.arena || 0));
+  const topMmlu = Math.max(...filtered.map(m => m.mmlu || 0));
+
+  const html = filtered.map((m, i) => {
+    const tierColors = { 1: 'var(--tier1)', 2: 'var(--tier2)', 3: 'var(--tier3)', 4: 'var(--tier4)' };
+    const tierLabels = { 1: 'Ultra-fast', 2: 'Fast', 3: 'Moderate', 4: 'Variable' };
+    const tierColor = tierColors[m.speedTier] || 'var(--text-muted)';
+    const spColor = getSpeedColor(m.speed || 0);
+    const spPct = getSpeedPercent(m.speed || 0);
+
+    return `<tr class="fade-in" style="animation-delay:${Math.min(i * 15, 500)}ms">
+      <td>
+        <span class="provider-badge">
+          <span class="tier-dot t${m.speedTier}"></span>
+          ${m.provider}
+        </span>
+      </td>
+      <td><span class="model-name">${m.name}</span></td>
+      <td>${m.family}</td>
+      <td>${m.params || '—'}</td>
+      <td>
+        <div class="speed-bar">
+          <div class="speed-bar-track">
+            <div class="speed-bar-fill" style="width:${spPct}%;background:${spColor}"></div>
+          </div>
+          <span class="speed-val" style="color:${spColor}">${m.speed || '—'}</span>
+        </div>
+      </td>
+      <td class="score-cell">${m.ttft ? m.ttft : '—'}</td>
+      <td class="score-cell ${scoreClass(m.arena, 1350, 1200)}">${m.arena || '—'}</td>
+      <td class="score-cell ${scoreClass(m.mmlu, 88, 80)}">${m.mmlu ? m.mmlu.toFixed(1) : '—'}</td>
+      <td class="score-cell ${scoreClass(m.coding, 82, 72)}">${m.coding ? m.coding.toFixed(1) : '—'}</td>
+      <td class="score-cell ${scoreClass(m.math, 80, 65)}">${m.math ? m.math.toFixed(1) : '—'}</td>
+      <td><span class="context-val">${formatContext(m.contextWindow)}</span></td>
+      <td><span class="free-badge ${m.free ? 'yes' : 'no'}">${m.free ? 'FREE' : 'PAID'}</span></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('tableBody').innerHTML = html || `
+    <tr><td colspan="12">
+      <div class="no-results">
+        <div class="emoji">🔍</div>
+        <div class="msg">No models match your filters</div>
+      </div>
+    </td></tr>`;
+}
+
+function renderCards() {
+  const html = filtered.map((m, i) => {
+    const spColor = getSpeedColor(m.speed || 0);
+    const spPct = getSpeedPercent(m.speed || 0);
+
+    return `<div class="model-card fade-in" style="animation-delay:${Math.min(i * 30, 600)}ms">
+      <div class="card-header">
+        <div>
+          <div class="card-model-name">${m.name}</div>
+          <div class="card-provider">${m.provider} · ${m.family} · ${m.params || '—'}</div>
+        </div>
+        <div class="card-badges">
+          <span class="free-badge ${m.free ? 'yes' : 'no'}">${m.free ? 'FREE' : 'PAID'}</span>
+        </div>
+      </div>
+      <div class="card-speed-bar">
+        <div class="card-speed-label">
+          <span>Speed</span>
+          <span style="color:${spColor};font-weight:700">${m.speed || '—'} tok/s</span>
+        </div>
+        <div class="card-speed-track">
+          <div class="card-speed-fill" style="width:${spPct}%;background:${spColor}"></div>
+        </div>
+      </div>
+      <div class="card-stats">
+        <div class="card-stat">
+          <div class="card-stat-value ${scoreClass(m.arena, 1350, 1200)}">${m.arena || '—'}</div>
+          <div class="card-stat-label">Arena ELO</div>
+        </div>
+        <div class="card-stat">
+          <div class="card-stat-value ${scoreClass(m.mmlu, 88, 80)}">${m.mmlu ? m.mmlu.toFixed(1) : '—'}</div>
+          <div class="card-stat-label">MMLU</div>
+        </div>
+        <div class="card-stat">
+          <div class="card-stat-value ${scoreClass(m.coding, 82, 72)}">${m.coding ? m.coding.toFixed(1) : '—'}</div>
+          <div class="card-stat-label">Coding</div>
+        </div>
+        <div class="card-stat">
+          <div class="card-stat-value ${scoreClass(m.math, 80, 65)}">${m.math ? m.math.toFixed(1) : '—'}</div>
+          <div class="card-stat-label">Math</div>
+        </div>
+        <div class="card-stat">
+          <div class="card-stat-value">${m.ttft || '—'}</div>
+          <div class="card-stat-label">TTFT (ms)</div>
+        </div>
+        <div class="card-stat">
+          <div class="card-stat-value">${formatContext(m.contextWindow)}</div>
+          <div class="card-stat-label">Context</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('cardGrid').innerHTML = html || `
+    <div class="no-results" style="grid-column:1/-1">
+      <div class="emoji">🔍</div>
+      <div class="msg">No models match your filters</div>
+    </div>`;
+}
+
+function sortBy(col) {
+  if (currentSort.col === col) {
+    currentSort.dir = currentSort.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    currentSort.col = col;
+    currentSort.dir = col === 'speed' || col === 'arena' || col === 'mmlu' || col === 'coding' || col === 'math' ? 'desc' : 'asc';
+  }
+  applyFilters();
+}
+
+function updateSortHeaders() {
+  document.querySelectorAll('th').forEach(th => {
+    const col = th.dataset.col;
+    th.classList.toggle('sorted', col === currentSort.col);
+    const arrow = th.querySelector('.sort-arrow');
+    if (arrow) {
+      arrow.textContent = col === currentSort.col ? (currentSort.dir === 'asc' ? '▲' : '▼') : '';
+    }
+  });
+}
+
+function filterTier(tier, btn) {
+  currentTier = tier;
+  document.querySelectorAll('.tier-filter .filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  applyFilters();
+}
+
+function filterFree(val, btn) {
+  currentFree = val;
+  btn.parentElement.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  applyFilters();
+}
+
+function setView(view, btn) {
+  currentView = view;
+  document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tableView').style.display = view === 'table' ? '' : 'none';
+  document.getElementById('cardView').style.display = view === 'cards' ? '' : 'none';
+  render();
+}
+
+// Search debounce
+let searchTimeout;
+document.getElementById('searchInput').addEventListener('input', () => {
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(applyFilters, 200);
+});
+</script>
+</body>
+</html>
