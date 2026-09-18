@@ -125,10 +125,11 @@ class TestPreferredConnection:
             local=ProviderConfig(name="local", base_url="http://127.0.0.1:11434/v1", api_keys=["local"]),
         )
 
-    def test_default_skips_local_when_cloud_exists(self, monkeypatch) -> None:
+    def test_default_keeps_local_as_last_resort(self, monkeypatch) -> None:
         r = self._router(monkeypatch)
         chain = r.apply_preferred_connection(r.get_fallbacks("llama-test"), None)
-        assert [fb.provider for fb in chain] == ["groq", "cerebras"]
+        assert [fb.provider for fb in chain] == ["groq", "cerebras", "local"]
+        assert chain[-1].model == "llama3.2"
 
     def test_preferred_local_goes_first_then_cloud(self, monkeypatch) -> None:
         r = self._router(monkeypatch)

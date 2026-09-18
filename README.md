@@ -136,8 +136,8 @@ client = OpenAI(
 )
 
 response = client.chat.completions.create(
-    model="llama-3.3-70b",
     messages=[{"role": "user", "content": "Hello!"}],
+    # model is optional — omit it to let the gateway pick a default
 )
 print(response.choices[0].message.content)
 ```
@@ -149,21 +149,21 @@ print(response.choices[0].message.content)
 curl http://localhost:8080/v1/models \
   -H "Authorization: Bearer your-master-key"
 
-# Chat completion
+# Chat completion (model is optional — omit it to let the gateway pick)
 curl http://localhost:8080/v1/chat/completions \
   -H "Authorization: Bearer your-master-key" \
   -H "Content-Type: application/json" \
-  -d '{"model": "llama-3.3-70b", "messages": [{"role": "user", "content": "Hello!"}]}'
+  -d '{"messages": [{"role": "user", "content": "Hello!"}]}'
 
 # Prefer a connection (local Ollama first, then cloud fallback)
 curl http://localhost:8080/v1/chat/completions \
   -H "Authorization: Bearer your-master-key" \
   -H "X-Preferred-Connection: local" \
   -H "Content-Type: application/json" \
-  -d '{"model": "llama-3.3-70b", "messages": [{"role": "user", "content": "Hello!"}], "preferred_connection": "local"}'
+  -d '{"messages": [{"role": "user", "content": "Hello!"}], "preferred_connection": "local"}'
 ```
 
-Interactive chat omits `preferred_connection`, so the local LLM is **not** tried (it would add latency). Async jobs can send `X-Preferred-Connection: local` or `"preferred_connection": "local"` to use on-device Ollama first, then the usual cloud chain.
+Interactive chat omits `preferred_connection`, so cloud free providers are tried first and **local Ollama is last-resort** after they fail. Async jobs can send `X-Preferred-Connection: local` or `"preferred_connection": "local"` to use on-device Ollama first, then the usual cloud chain.
 
 ### With Gateway API Keys
 

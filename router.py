@@ -152,9 +152,8 @@ class Router:
         """Get the ordered fallback chain for a unified model name.
 
         When a local LLM is configured (LOCAL_LLM_MODEL), it is appended as the
-        last-resort entry after all cloud providers. Callers that serve
-        interactive chat should run the chain through
-        ``apply_preferred_connection`` so local is skipped unless requested.
+        last-resort entry after all cloud providers. Use
+        ``apply_preferred_connection`` to put a provider first when requested.
         """
         model_cfg = self.config.models.get(model)
         fallbacks = list(model_cfg.fallbacks) if model_cfg else []
@@ -173,11 +172,11 @@ class Router:
     ) -> list[ModelFallback]:
         """Reorder fallbacks for a preferred provider, with fallback.
 
-        * ``preferred_connection=local`` tries local Ollama first, then cloud.
+        * Default (no preference): cloud first, local Ollama last-resort.
+          Local is only used after all free/cloud providers fail.
+        * ``preferred_connection=local`` tries local first, then cloud
+          (for async jobs like Mem0).
         * Any other preferred name is moved to the front of the chain.
-        * Default (no preference): skip local when cloud providers exist so
-          interactive answers are not delayed by on-device Llama.
-        * If local is the only remaining provider, it is kept.
         """
         preferred_name = (preferred or "").strip().lower()
         items = list(fallbacks)
@@ -186,13 +185,15 @@ class Router:
             if local_llm_enabled() and self._get_provider("local"):
                 items.insert(0, ModelFallback(provider="local", model=local_llm_model() or "local"))
 
-        if preferred_name:
-            preferred_items = [fb for fb in items if fb.provider == preferred_name]
-            rest = [fb for fb in items if fb.provider != preferred_name]
-            return preferred_items + rest
+        if not preferred_name:
+            # Keep local pinned last; do not drop it.
+            non_local = [fb for fb in items if fb.provider != "local"]
+            local_items = [fb for fb in items if fb.provider == "local"]
+            return non_local + local_items
 
-        non_local = [fb for fb in items if fb.provider != "local"]
-        return non_local if non_local else items
+        preferred_items = [fb for fb in items if fb.provider == preferred_name]
+        rest = [fb for fb in items if fb.provider != preferred_name]
+        return preferred_items + rest
 
     def _get_provider(self, name: str) -> ProviderConfig | None:
         p = self.config.providers.get(name)

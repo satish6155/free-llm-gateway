@@ -272,6 +272,28 @@ def verify_master_key(authorization: str | None) -> None:
 
 
 # ── Chat completions ─────────────────────────────────────────────────────────
+_AUTO_MODEL_NAMES = {"", "auto", "default", "smart"}
+
+
+def _resolve_requested_model(model: str | None) -> str:
+    """Pick a chat model when the client omits one (or sends auto/default)."""
+    name = (model or "").strip()
+    if name.lower() not in _AUTO_MODEL_NAMES:
+        return name
+    picked = smart_default.get_default("chat") or {}
+    chosen = str(picked.get("model") or "").strip()
+    if not chosen and config.models:
+        chosen = next(iter(config.models))
+    if not chosen:
+        raise HTTPException(400, "Missing 'model' field and no default model is configured")
+    logger.info(
+        "No model specified; using default %s (%s)",
+        chosen,
+        picked.get("reason") or "smart default",
+    )
+    return chosen
+
+
 def _preferred_connection(request: Request, body: dict[str, Any] | None = None) -> str | None:
     """Preferred provider name from header or body (with fallback to the rest of the chain)."""
     header = request.headers.get("x-preferred-connection") or request.headers.get("X-Preferred-Connection")
@@ -302,7 +324,7 @@ async def chat_completions(request: Request, authorization: str | None = Header(
         )
 
     body = raw_body  # keep full body for downstream compatibility
-    model = validated.model or ""
+    model = validated.model or body.get("model") or ""
     stream = validated.stream
 
     # ── Format translation: auto-detect and normalize to OpenAI ──
@@ -311,10 +333,8 @@ async def chat_completions(request: Request, authorization: str | None = Header(
         logger.info("Format translation: %s -> openai", source_format)
         body = translate_to_openai(body, source_format)
 
-    if not model:
-        model = body.get("model", "")
-        if not model:
-            raise HTTPException(400, "Missing 'model' field")
+    model = _resolve_requested_model(model)
+    body["model"] = model
 
     # ── RTK Token Compression ──
     messages = body.get("messages", [])
@@ -1910,12 +1930,10 @@ async def batch_requests(request: Request, authorization: str | None = Header(No
         )
 
     async def _process_batch_item(idx: int, req: dict) -> dict:
-        model = req.get("model", "")
-        if not model:
-            return {
-                "index": idx, "success": False,
-                "error": "Missing 'model' field",
-            }
+        try:
+            model = _resolve_requested_model(req.get("model", ""))
+        except HTTPException as exc:
+            return {"index": idx, "success": False, "error": str(exc.detail)}
 
         # Smart routing for each item
         resolved = smart_router.resolve(model)
@@ -2137,9 +2155,8 @@ async def api_playground(request: Request, authorization: str | None = Header(No
     model = body.get("model", "")
     stream = body.get("stream", False)
 
-    if not model:
-        model = "llama-3.3-70b"
-        body["model"] = model
+    model = _resolve_requested_model(model)
+    body["model"] = model
 
     # Detect and translate format
     source_format = detect_format(body)
