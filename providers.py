@@ -70,6 +70,7 @@ def _build_openai_headers(provider: ProviderConfig) -> dict[str, str]:
 def _build_openai_body(model: str, payload: dict[str, Any]) -> dict[str, Any]:
     """Normalize the request body for OpenAI-compatible providers."""
     body = {**payload}
+    body.pop("preferred_connection", None)
     body["model"] = model
     return body
 

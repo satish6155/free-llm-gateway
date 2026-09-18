@@ -116,3 +116,42 @@ class TestLocalFallbackChain:
         assert "local" in providers
         assert providers["local"].api_key == "local"
         assert providers["local"].base_url == "http://127.0.0.1:1234/v1"
+
+
+class TestPreferredConnection:
+    def _router(self, monkeypatch) -> Router:
+        monkeypatch.setenv("LOCAL_LLM_MODEL", "llama3.2")
+        return _make_router(
+            local=ProviderConfig(name="local", base_url="http://127.0.0.1:11434/v1", api_keys=["local"]),
+        )
+
+    def test_default_skips_local_when_cloud_exists(self, monkeypatch) -> None:
+        r = self._router(monkeypatch)
+        chain = r.apply_preferred_connection(r.get_fallbacks("llama-test"), None)
+        assert [fb.provider for fb in chain] == ["groq", "cerebras"]
+
+    def test_preferred_local_goes_first_then_cloud(self, monkeypatch) -> None:
+        r = self._router(monkeypatch)
+        chain = r.apply_preferred_connection(r.get_fallbacks("llama-test"), "local")
+        assert [fb.provider for fb in chain] == ["local", "groq", "cerebras"]
+        assert chain[0].model == "llama3.2"
+
+    def test_preferred_cloud_provider_moves_front(self, monkeypatch) -> None:
+        r = self._router(monkeypatch)
+        chain = r.apply_preferred_connection(r.get_fallbacks("llama-test"), "cerebras")
+        assert [fb.provider for fb in chain] == ["cerebras", "groq", "local"]
+
+    def test_keeps_local_when_it_is_the_only_provider(self, monkeypatch) -> None:
+        monkeypatch.setenv("LOCAL_LLM_MODEL", "nomic-embed-text")
+        r = _make_router(
+            local=ProviderConfig(name="local", base_url="http://127.0.0.1:11434/v1", api_keys=["local"]),
+            models={
+                "nomic-embed-text": ModelConfig(
+                    unified_name="nomic-embed-text",
+                    fallbacks=[ModelFallback(provider="local", model="nomic-embed-text")],
+                )
+            },
+        )
+        chain = r.apply_preferred_connection(r.get_fallbacks("nomic-embed-text"), None)
+        assert [fb.provider for fb in chain] == ["local"]
+

@@ -187,6 +187,7 @@ class ChatCompletionRequest(BaseModel):
     stop: str | list[str] | None = None
     n: int | None = Field(default=None, gt=0)
     conversation_id: str | None = None
+    preferred_connection: str | None = None
 
     @field_validator("messages")
     @classmethod
@@ -271,6 +272,14 @@ def verify_master_key(authorization: str | None) -> None:
 
 
 # ── Chat completions ─────────────────────────────────────────────────────────
+def _preferred_connection(request: Request, body: dict[str, Any] | None = None) -> str | None:
+    """Preferred provider name from header or body (with fallback to the rest of the chain)."""
+    header = request.headers.get("x-preferred-connection") or request.headers.get("X-Preferred-Connection")
+    from_body = (body or {}).get("preferred_connection")
+    value = (header or from_body or "").strip()
+    return value or None
+
+
 @app.post("/v1/chat/completions")
 async def chat_completions(request: Request, authorization: str | None = Header(None)):
     verify_master_key(authorization)
@@ -371,7 +380,12 @@ async def chat_completions(request: Request, authorization: str | None = Header(
     # ── Route request ──
     fallback_attempts: list[str] = []
     try:
-        result, provider, provider_model = await router.route_request(model, body, _client)
+        result, provider, provider_model = await router.route_request(
+            model,
+            body,
+            _client,
+            preferred_connection=_preferred_connection(request, body),
+        )
     except AllRateLimitedError:
         # All providers rate-limited → queue the request
         return await _handle_rate_limited(model, body, stream)
@@ -509,10 +523,14 @@ async def embeddings(request: Request, authorization: str | None = Header(None))
     verify_master_key(authorization)
     body = await request.json()
     model = body.get("model", "")
+    preferred = _preferred_connection(request, body)
 
-    fallbacks = router.get_fallbacks(model)
+    fallbacks = router.apply_preferred_connection(router.get_fallbacks(model), preferred)
     if not fallbacks:
         raise HTTPException(400, f"Unknown model: {model}")
+
+    upstream = dict(body)
+    upstream.pop("preferred_connection", None)
 
     for fb in fallbacks:
         provider = config.providers.get(fb.provider)
@@ -523,9 +541,9 @@ async def embeddings(request: Request, authorization: str | None = Header(None))
             "Content-Type": "application/json",
         }
         url = f"{provider.base_url}/embeddings"
-        body["model"] = fb.model
+        upstream["model"] = fb.model
         try:
-            resp = await _client.post(url, headers=headers, json=body, timeout=60.0)
+            resp = await _client.post(url, headers=headers, json=upstream, timeout=60.0)
             if resp.status_code < 400:
                 return resp.json()
         except Exception as e:

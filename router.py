@@ -152,15 +152,47 @@ class Router:
         """Get the ordered fallback chain for a unified model name.
 
         When a local LLM is configured (LOCAL_LLM_MODEL), it is appended as the
-        last-resort entry after all cloud providers.
+        last-resort entry after all cloud providers. Callers that serve
+        interactive chat should run the chain through
+        ``apply_preferred_connection`` so local is skipped unless requested.
         """
         model_cfg = self.config.models.get(model)
         fallbacks = list(model_cfg.fallbacks) if model_cfg else []
         if local_llm_enabled() and self._get_provider("local"):
             local_model = local_llm_model() or "local"
+            if not model_cfg:
+                local_model = model or local_model
             if not any(fb.provider == "local" for fb in fallbacks):
                 fallbacks.append(ModelFallback(provider="local", model=local_model))
         return fallbacks
+
+    def apply_preferred_connection(
+        self,
+        fallbacks: list[ModelFallback],
+        preferred: str | None,
+    ) -> list[ModelFallback]:
+        """Reorder fallbacks for a preferred provider, with fallback.
+
+        * ``preferred_connection=local`` tries local Ollama first, then cloud.
+        * Any other preferred name is moved to the front of the chain.
+        * Default (no preference): skip local when cloud providers exist so
+          interactive answers are not delayed by on-device Llama.
+        * If local is the only remaining provider, it is kept.
+        """
+        preferred_name = (preferred or "").strip().lower()
+        items = list(fallbacks)
+
+        if preferred_name == "local" and not any(fb.provider == "local" for fb in items):
+            if local_llm_enabled() and self._get_provider("local"):
+                items.insert(0, ModelFallback(provider="local", model=local_llm_model() or "local"))
+
+        if preferred_name:
+            preferred_items = [fb for fb in items if fb.provider == preferred_name]
+            rest = [fb for fb in items if fb.provider != preferred_name]
+            return preferred_items + rest
+
+        non_local = [fb for fb in items if fb.provider != "local"]
+        return non_local if non_local else items
 
     def _get_provider(self, name: str) -> ProviderConfig | None:
         p = self.config.providers.get(name)
@@ -297,17 +329,22 @@ class Router:
         model: str,
         payload: dict[str, Any],
         client: Any,
+        preferred_connection: str | None = None,
     ) -> tuple[Any, str, str]:
         """Route a request through the fallback chain with retry and backoff.
 
         Returns (response, provider_name, provider_model_name).
         Raises if all providers fail.
         """
-        fallbacks = self.get_fallbacks(model)
+        preferred = preferred_connection or (payload or {}).get("preferred_connection")
+        fallbacks = self.apply_preferred_connection(self.get_fallbacks(model), preferred)
         if not fallbacks:
             raise ValueError(f"Unknown model: {model}")
 
-        candidates = self._select_provider(model, fallbacks, payload)
+        upstream = dict(payload or {})
+        upstream.pop("preferred_connection", None)
+
+        candidates = self._select_provider(model, fallbacks, upstream)
         if not candidates:
             raise ValueError(
                 f"No available providers for model '{model}'. "
@@ -331,7 +368,7 @@ class Router:
                         model, provider.name, provider_model, attempt + 1,
                     )
                     self.rate_limiter.record_request(provider.name)
-                    result = await send_to_provider(client, provider, provider_model, payload)
+                    result = await send_to_provider(client, provider, provider_model, upstream)
                     latency = (time.time() - start) * 1000
 
                     tokens = _extract_usage(result)

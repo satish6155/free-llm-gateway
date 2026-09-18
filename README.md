@@ -154,7 +154,16 @@ curl http://localhost:8080/v1/chat/completions \
   -H "Authorization: Bearer your-master-key" \
   -H "Content-Type: application/json" \
   -d '{"model": "llama-3.3-70b", "messages": [{"role": "user", "content": "Hello!"}]}'
+
+# Prefer a connection (local Ollama first, then cloud fallback)
+curl http://localhost:8080/v1/chat/completions \
+  -H "Authorization: Bearer your-master-key" \
+  -H "X-Preferred-Connection: local" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "llama-3.3-70b", "messages": [{"role": "user", "content": "Hello!"}], "preferred_connection": "local"}'
 ```
+
+Interactive chat omits `preferred_connection`, so the local LLM is **not** tried (it would add latency). Async jobs can send `X-Preferred-Connection: local` or `"preferred_connection": "local"` to use on-device Ollama first, then the usual cloud chain.
 
 ### With Gateway API Keys
 
