@@ -210,6 +210,20 @@ PROVIDER_GUIDES = {
         ],
         "notes": "400+ models from Ollama library. Free tier with qualitative limits. NOT OpenAI SDK-compatible (uses Ollama API).",
     },
+    "local": {
+        "name": "Local LLM",
+        "sign_in_url": "https://ollama.com",
+        "docs_url": "https://github.com/ollama/ollama/blob/main/docs/openai.md",
+        "env_key": "LOCAL_LLM_MODEL",
+        "rate_limit": "Unlimited (local hardware)",
+        "instructions": [
+            "Run a local OpenAI-compatible server (Ollama, LM Studio, llama.cpp, vLLM, etc.)",
+            "Set LOCAL_LLM_BASE_URL (default: http://127.0.0.1:11434/v1 for Ollama)",
+            "Set LOCAL_LLM_MODEL to a model id your local server exposes (e.g. llama3.2)",
+            "Optional: LOCAL_LLM_KEY if your server requires auth",
+        ],
+        "notes": "Last-resort fallback appended to every model chain. Only used after all cloud providers fail.",
+    },
     "kilo_code": {
         "name": "Kilo AI",
         "sign_in_url": "https://kilo.ai",

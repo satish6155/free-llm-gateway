@@ -103,8 +103,11 @@ Open `http://127.0.0.1:8080/` for the dashboard.
 | `OPENAI_KEY` | GPT-4, GPT-4o (paid) | [platform.openai.com ↗](https://platform.openai.com/api-keys) |
 | `PERPLEXITY_KEY` | Sonar search-augmented models (paid) | [perplexity.ai ↗](https://perplexity.ai/settings/api) |
 | `XAI_KEY` | Grok models (paid) | [x.ai ↗](https://console.x.ai) |
+| `LOCAL_LLM_BASE_URL` | Local OpenAI-compatible server URL | Default: `http://127.0.0.1:11434/v1` (Ollama) |
+| `LOCAL_LLM_MODEL` | Local model id used as last-resort fallback | e.g. `llama3.2` |
+| `LOCAL_LLM_KEY` | Optional auth for local server | Defaults to `local` when enabled |
 
-You only need **at least one** provider key to get started.
+You only need **at least one** provider key to get started. Set `LOCAL_LLM_MODEL` to append a local LLM (Ollama, LM Studio, llama.cpp, vLLM, …) as the **last** entry in every fallback chain.
 
 ### Model Configuration (`models.yaml`)
 
@@ -117,6 +120,7 @@ models:
       model: meta-llama/llama-3.3-70b-instruct:free
     - provider: nvidia
       model: meta/llama-3.1-405b-instruct
+    # local is auto-appended last when LOCAL_LLM_MODEL is set
 ```
 
 ## Usage

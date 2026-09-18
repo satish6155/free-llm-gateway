@@ -148,6 +148,8 @@ PROVIDER_DEFS: dict[str, tuple[str, str]] = {
     "perplexity": ("PERPLEXITY_KEY", "https://api.perplexity.ai"),
     "xai": ("XAI_KEY", "https://api.x.ai/v1"),
     "novita": ("NOVITA_KEY", "https://api.novita.ai/v3/openai"),
+    # Local OpenAI-compatible server (Ollama, LM Studio, llama.cpp, vLLM, etc.)
+    "local": ("LOCAL_LLM_KEY", "http://127.0.0.1:11434/v1"),
 }
 
 # Providers that use OpenAI-compatible chat/completions endpoints
@@ -155,7 +157,7 @@ OPENAI_COMPATIBLE = {
     "openrouter", "github", "groq", "cerebras", "nvidia",
     "siliconflow", "mistral", "llm7", "ollama",
     "deepseek", "together", "fireworks", "sambanova", "chutes",
-    "openai", "perplexity", "xai", "novita",
+    "openai", "perplexity", "xai", "novita", "local",
 }
 
 # Providers needing special request formatting
@@ -185,6 +187,19 @@ def _load_provider_keys(env_key: str) -> list[str]:
     return keys
 
 
+def local_llm_model() -> str:
+    """Model id to use for the local last-resort fallback (empty = disabled)."""
+    return os.environ.get("LOCAL_LLM_MODEL", "").strip()
+
+
+def local_llm_enabled() -> bool:
+    """Whether the local LLM last-resort fallback should be active."""
+    if local_llm_model():
+        return True
+    flag = os.environ.get("LOCAL_LLM_ENABLED", "").strip().lower()
+    return flag in ("1", "true", "yes", "on")
+
+
 def _load_providers() -> dict[str, ProviderConfig]:
     providers: dict[str, ProviderConfig] = {}
     for name, (env_key, base_url_tpl) in PROVIDER_DEFS.items():
@@ -193,6 +208,14 @@ def _load_providers() -> dict[str, ProviderConfig]:
         if "{account_id}" in base_url:
             account_id = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "")
             base_url = base_url.replace("{account_id}", account_id)
+        if name == "local":
+            base_url = os.environ.get(
+                "LOCAL_LLM_BASE_URL", base_url_tpl
+            ).strip().rstrip("/") or base_url_tpl
+            # Local servers often need no auth; use a placeholder so the
+            # provider is treated as configured when the fallback is enabled.
+            if local_llm_enabled() and not api_keys:
+                api_keys = ["local"]
         providers[name] = ProviderConfig(
             name=name,
             base_url=base_url,

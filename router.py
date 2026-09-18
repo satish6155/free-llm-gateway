@@ -9,7 +9,7 @@ import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from config import AppConfig, ModelFallback
+from config import AppConfig, ModelFallback, local_llm_enabled, local_llm_model
 from providers import ProviderConfig, ProviderError, send_to_provider
 from rate_limiter import RateLimiter
 from rate_tracker import per_key_rate_tracker
@@ -149,11 +149,18 @@ class Router:
         self._rr_index: dict[str, int] = {}  # round-robin index per model
 
     def get_fallbacks(self, model: str) -> list[ModelFallback]:
-        """Get the ordered fallback chain for a unified model name."""
+        """Get the ordered fallback chain for a unified model name.
+
+        When a local LLM is configured (LOCAL_LLM_MODEL), it is appended as the
+        last-resort entry after all cloud providers.
+        """
         model_cfg = self.config.models.get(model)
-        if model_cfg:
-            return model_cfg.fallbacks
-        return []
+        fallbacks = list(model_cfg.fallbacks) if model_cfg else []
+        if local_llm_enabled() and self._get_provider("local"):
+            local_model = local_llm_model() or "local"
+            if not any(fb.provider == "local" for fb in fallbacks):
+                fallbacks.append(ModelFallback(provider="local", model=local_model))
+        return fallbacks
 
     def _get_provider(self, name: str) -> ProviderConfig | None:
         p = self.config.providers.get(name)
@@ -170,6 +177,9 @@ class Router:
         Providers are ordered: healthy first (round-robin rotated), then
         down-but-in-cooldown, skipping rate-limited ones. Providers with
         recent 429 penalties sink in priority so working ones are tried first.
+
+        The local LLM provider is always kept at the end as a last resort and
+        is excluded from round-robin rotation.
 
         If payload is provided, estimates token count and pre-checks TPM/TPD
         limits before adding a provider as a candidate.
@@ -228,6 +238,10 @@ class Router:
                 continue
             candidates.append((provider, fb.model))
 
+        # Keep local LLM pinned as last-resort; round-robin only cloud providers
+        local_candidates = [c for c in candidates if c[0].name == "local"]
+        candidates = [c for c in candidates if c[0].name != "local"]
+
         if len(candidates) > 1:
             # Sort by dynamic penalty: providers with more 429s sink lower
             def _sort_key(item: tuple[ProviderConfig, str]) -> int:
@@ -241,7 +255,7 @@ class Router:
             self._rr_index[model] = idx + 1
             candidates = candidates[idx:] + candidates[:idx]
 
-        return candidates
+        return candidates + local_candidates
 
     def _log_request(self, log: RequestLog) -> None:
         self._logs.append(log)
@@ -300,9 +314,15 @@ class Router:
                 "Check API keys and rate limits."
             )
 
+        # Cap attempts, but always keep the local last-resort provider if present
+        to_try = candidates[:MAX_RETRIES]
+        if candidates and candidates[-1][0].name == "local":
+            if not any(p.name == "local" for p, _ in to_try):
+                to_try = to_try + [candidates[-1]]
+
         errors: list[str] = []
         all_rate_limited = True
-        for provider, provider_model in candidates[:MAX_RETRIES]:
+        for provider, provider_model in to_try:
             for attempt in range(RETRY_MAX_ATTEMPTS + 1):
                 start = time.time()
                 try:
