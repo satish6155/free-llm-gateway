@@ -137,6 +137,18 @@ class TestPreferredConnection:
         assert [fb.provider for fb in chain] == ["local", "groq", "cerebras"]
         assert chain[0].model == "llama3.2"
 
+    def test_select_provider_honors_preferred_local(self, monkeypatch) -> None:
+        monkeypatch.setenv("LOCAL_LLM_MODEL", "llama3.2")
+        groq = ProviderConfig(name="groq", base_url="https://api.groq.com", api_keys=["g"])
+        local = ProviderConfig(name="local", base_url="http://127.0.0.1:11434/v1", api_keys=["local"])
+        r = _make_router(cloud_providers={"groq": groq}, local=local)
+        fallbacks = r.apply_preferred_connection(r.get_fallbacks("llama-test"), "local")
+        selected = r._select_provider(
+            "llama-test", fallbacks, preferred_connection="local",
+        )
+        assert selected[0][0].name == "local"
+        assert selected[0][1] == "llama3.2"
+
     def test_preferred_cloud_provider_moves_front(self, monkeypatch) -> None:
         r = self._router(monkeypatch)
         chain = r.apply_preferred_connection(r.get_fallbacks("llama-test"), "cerebras")

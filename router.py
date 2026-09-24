@@ -204,6 +204,7 @@ class Router:
     def _select_provider(
         self, model: str, fallbacks: list[ModelFallback],
         payload: dict[str, Any] | None = None,
+        preferred_connection: str | None = None,
     ) -> list[tuple[ProviderConfig, str]]:
         """Filter fallbacks to available providers with round-robin ordering.
 
@@ -211,8 +212,9 @@ class Router:
         down-but-in-cooldown, skipping rate-limited ones. Providers with
         recent 429 penalties sink in priority so working ones are tried first.
 
-        The local LLM provider is always kept at the end as a last resort and
-        is excluded from round-robin rotation.
+        The local LLM provider is kept at the end as a last resort by default
+        and is excluded from round-robin rotation. When
+        ``preferred_connection=local``, local is tried first instead.
 
         If payload is provided, estimates token count and pre-checks TPM/TPD
         limits before adding a provider as a candidate.
@@ -271,7 +273,7 @@ class Router:
                 continue
             candidates.append((provider, fb.model))
 
-        # Keep local LLM pinned as last-resort; round-robin only cloud providers
+        prefer_local = (preferred_connection or "").strip().lower() == "local"
         local_candidates = [c for c in candidates if c[0].name == "local"]
         candidates = [c for c in candidates if c[0].name != "local"]
 
@@ -288,6 +290,8 @@ class Router:
             self._rr_index[model] = idx + 1
             candidates = candidates[idx:] + candidates[:idx]
 
+        if prefer_local:
+            return local_candidates + candidates
         return candidates + local_candidates
 
     def _log_request(self, log: RequestLog) -> None:
@@ -345,7 +349,9 @@ class Router:
         upstream = dict(payload or {})
         upstream.pop("preferred_connection", None)
 
-        candidates = self._select_provider(model, fallbacks, upstream)
+        candidates = self._select_provider(
+            model, fallbacks, upstream, preferred_connection=preferred,
+        )
         if not candidates:
             raise ValueError(
                 f"No available providers for model '{model}'. "
