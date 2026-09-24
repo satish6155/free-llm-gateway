@@ -14,7 +14,10 @@ from config import ProviderConfig, OPENAI_COMPATIBLE, SPECIAL_PROVIDERS
 
 logger = logging.getLogger(__name__)
 
-REQUEST_TIMEOUT = 120.0  # seconds
+REQUEST_TIMEOUT = float(os.environ.get("PROVIDER_REQUEST_TIMEOUT_SEC", "120") or "120")
+NVIDIA_REQUEST_TIMEOUT = float(
+    os.environ.get("NVIDIA_REQUEST_TIMEOUT_SEC", "25") or "25"
+)
 
 
 class ProviderError(Exception):
@@ -76,6 +79,14 @@ def _is_groq_gpt_oss(provider_name: str, model: str) -> bool:
     return "gpt-oss" in name
 
 
+def _is_nvidia_gpt_oss(provider_name: str, model: str) -> bool:
+    """NVIDIA NIM hosts openai/gpt-oss-* with reasoning_effort."""
+    if provider_name != "nvidia":
+        return False
+    name = (model or "").lower()
+    return "gpt-oss" in name
+
+
 def _build_openai_body(
     model: str,
     payload: dict[str, Any],
@@ -86,6 +97,14 @@ def _build_openai_body(
     body = {**payload}
     body.pop("preferred_connection", None)
     body["model"] = model
+
+    # Local Ollama / llama.cpp reject gpt-oss/nemotron-only fields.
+    if provider_name == "local":
+        body.pop("reasoning_effort", None)
+        body.pop("max_completion_tokens", None)
+        body.pop("reasoning", None)
+        body.pop("chat_template_kwargs", None)
+        return body
 
     if _is_groq_gpt_oss(provider_name, model):
         # Groq OSS chat expects max_completion_tokens; keep max_tokens for
@@ -98,6 +117,22 @@ def _build_openai_body(
             body["reasoning_effort"] = (
                 os.environ.get("GROQ_GPT_OSS_REASONING_EFFORT", "low").strip() or "low"
             )
+    elif _is_nvidia_gpt_oss(provider_name, model):
+        # Non-thinking classification defaults to "low".
+        if not body.get("reasoning_effort"):
+            body["reasoning_effort"] = (
+                os.environ.get("NVIDIA_GPT_OSS_REASONING_EFFORT", "low").strip() or "low"
+            )
+    elif "nemotron" in (model or "").lower() and provider_name in {"openrouter", "nvidia"}:
+        # Nemotron 3.5 Lightning: disable thinking unless caller already set it.
+        if "chat_template_kwargs" not in body:
+            body["chat_template_kwargs"] = {"enable_thinking": False}
+        else:
+            kwargs = dict(body.get("chat_template_kwargs") or {})
+            kwargs.setdefault("enable_thinking", False)
+            body["chat_template_kwargs"] = kwargs
+        if "reasoning" not in body:
+            body["reasoning"] = {"enabled": False}
     return body
 
 
@@ -112,12 +147,13 @@ async def _request_openai_compatible(
     body = _build_openai_body(model, payload, provider_name=provider.name)
 
     stream = payload.get("stream", False)
+    timeout = NVIDIA_REQUEST_TIMEOUT if provider.name == "nvidia" else REQUEST_TIMEOUT
 
     if stream:
         return _stream_response(client, url, headers, body, provider.name)
 
     try:
-        resp = await client.post(url, headers=headers, json=body, timeout=REQUEST_TIMEOUT)
+        resp = await client.post(url, headers=headers, json=body, timeout=timeout)
     except httpx.TimeoutException:
         raise ProviderError(provider.name, 0, "Request timed out")
     if _is_rate_limited(resp.status_code):
@@ -135,8 +171,9 @@ async def _stream_response(
     body: dict[str, Any],
     provider_name: str,
 ) -> AsyncIterator[bytes]:
+    timeout = NVIDIA_REQUEST_TIMEOUT if provider_name == "nvidia" else REQUEST_TIMEOUT
     try:
-        async with client.stream("POST", url, headers=headers, json=body, timeout=REQUEST_TIMEOUT) as resp:
+        async with client.stream("POST", url, headers=headers, json=body, timeout=timeout) as resp:
             if _is_rate_limited(resp.status_code):
                 raise ProviderError(provider_name, 429, "Rate limited", retry_after=_get_retry_after(resp))
             if resp.status_code >= 400:

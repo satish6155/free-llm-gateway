@@ -115,13 +115,36 @@ models:
       supports_vision: false
       supports_streaming: true
     fallbacks:
-    # GroqCloud serves this model directly. OpenRouter's :free route 404s.
+    # Conversation path: Groq first (fast). NVIDIA NIM often hangs on this model.
     - provider: groq
       model: openai/gpt-oss-20b
     - provider: openrouter
       model: openai/gpt-oss-20b:free
-    # Local Ollama is also auto-appended when LOCAL_LLM_MODEL is set; listed
-    # here so daily free-tier 429s clearly fall through to llama.
+    - provider: nvidia
+      model: openai/gpt-oss-20b
+    # Local Ollama is also auto-appended when LOCAL_LLM_MODEL is set.
+  # Memory save classifier / save-decision only — never Groq.
+  # OpenRouter :free Lightning currently hangs; use the same 30B-A3B paid
+  # slug with thinking disabled (near-zero cost) then local llama.
+  nemotron-3.5-lightning-save:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: openrouter
+      model: nvidia/nemotron-3.5-lightning
+    # Local llama is auto-appended as last resort when LOCAL_LLM_MODEL is set.
+  # Legacy GPT-OSS save path (NVIDIA NIM hangs; kept for experiments).
+  gpt-oss-20b-save:
+    capabilities:
+      supports_tools: true
+      supports_vision: false
+      supports_streaming: true
+    fallbacks:
+    - provider: nvidia
+      model: openai/gpt-oss-20b
+    # Local llama is auto-appended as last resort when LOCAL_LLM_MODEL is set.
   qwen3-coder:
     capabilities:
       supports_tools: true

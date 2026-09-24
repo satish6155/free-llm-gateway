@@ -399,6 +399,7 @@ class Router:
                     # Timeout (status 0): move to next provider immediately
                     if e.status == 0:
                         errors.append(f"{provider.name}: timeout")
+                        self.penalty_tracker.record_hit(provider.name, provider_model)
                         self._log_request(RequestLog(
                             timestamp=start, model=model,
                             provider=provider.name,
