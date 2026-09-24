@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import time
 from typing import Any, AsyncIterator
 
@@ -67,11 +68,36 @@ def _build_openai_headers(provider: ProviderConfig) -> dict[str, str]:
     return headers
 
 
-def _build_openai_body(model: str, payload: dict[str, Any]) -> dict[str, Any]:
+def _is_groq_gpt_oss(provider_name: str, model: str) -> bool:
+    """Groq hosts openai/gpt-oss-* with a few non-standard OpenAI fields."""
+    if provider_name != "groq":
+        return False
+    name = (model or "").lower()
+    return "gpt-oss" in name
+
+
+def _build_openai_body(
+    model: str,
+    payload: dict[str, Any],
+    *,
+    provider_name: str = "",
+) -> dict[str, Any]:
     """Normalize the request body for OpenAI-compatible providers."""
     body = {**payload}
     body.pop("preferred_connection", None)
     body["model"] = model
+
+    if _is_groq_gpt_oss(provider_name, model):
+        # Groq OSS chat expects max_completion_tokens; keep max_tokens for
+        # other clients by mapping when only max_tokens was provided.
+        if body.get("max_completion_tokens") is None and body.get("max_tokens") is not None:
+            body["max_completion_tokens"] = body.pop("max_tokens")
+        elif body.get("max_completion_tokens") is not None:
+            body.pop("max_tokens", None)
+        if not body.get("reasoning_effort"):
+            body["reasoning_effort"] = (
+                os.environ.get("GROQ_GPT_OSS_REASONING_EFFORT", "low").strip() or "low"
+            )
     return body
 
 
@@ -83,7 +109,7 @@ async def _request_openai_compatible(
 ) -> dict[str, Any] | AsyncIterator[bytes]:
     url = f"{provider.base_url}/chat/completions"
     headers = _build_openai_headers(provider)
-    body = _build_openai_body(model, payload)
+    body = _build_openai_body(model, payload, provider_name=provider.name)
 
     stream = payload.get("stream", False)
 
