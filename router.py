@@ -235,9 +235,12 @@ class Router:
             if state.is_limited():
                 logger.info("Provider %s is rate-limited, skipping", provider.name)
                 continue
-            # Skip providers marked as down (unless cooldown expired)
+            # Skip providers marked as down (unless cooldown expired), but still
+            # try an explicitly preferred provider — health probes can be stale.
             if self.health_checker and not self.health_checker.is_available(provider.name):
-                continue
+                prefer_name = (preferred_connection or "").strip().lower()
+                if prefer_name != provider.name:
+                    continue
             active_key = provider.api_key or ""
             # Register per-model rate limits (lazy init on first route)
             if fb.rpm_limit or fb.rpd_limit or fb.tpm_limit or fb.tpd_limit:
@@ -273,9 +276,17 @@ class Router:
                 continue
             candidates.append((provider, fb.model))
 
-        prefer_local = (preferred_connection or "").strip().lower() == "local"
+        prefer_name = (preferred_connection or "").strip().lower()
+        prefer_local = prefer_name == "local"
         local_candidates = [c for c in candidates if c[0].name == "local"]
         candidates = [c for c in candidates if c[0].name != "local"]
+
+        # Pin an explicit preferred cloud provider first (e.g. groq for chat).
+        # Round-robin must not rotate it away after a successful prior turn.
+        preferred_cloud: list[tuple[ProviderConfig, str]] = []
+        if prefer_name and prefer_name != "local":
+            preferred_cloud = [c for c in candidates if c[0].name == prefer_name]
+            candidates = [c for c in candidates if c[0].name != prefer_name]
 
         if len(candidates) > 1:
             # Sort by dynamic penalty: providers with more 429s sink lower
@@ -285,14 +296,14 @@ class Router:
 
             candidates.sort(key=_sort_key)
 
-            # Apply round-robin among providers with equal penalty
+            # Apply round-robin among non-preferred cloud providers only
             idx = self._rr_index.get(model, 0) % len(candidates)
             self._rr_index[model] = idx + 1
             candidates = candidates[idx:] + candidates[:idx]
 
         if prefer_local:
-            return local_candidates + candidates
-        return candidates + local_candidates
+            return local_candidates + preferred_cloud + candidates
+        return preferred_cloud + candidates + local_candidates
 
     def _log_request(self, log: RequestLog) -> None:
         self._logs.append(log)
